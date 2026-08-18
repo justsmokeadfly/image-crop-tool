@@ -11,15 +11,15 @@ try:
 except ImportError:
     AVIF_SUPPORTED = False
 
-APP_VERSION = "1.1"
-APP_NAME = f"Обработчик изображений (веб) v{APP_VERSION}"
+APP_VERSION = "1.2"
+APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 SUPPORTED_INPUTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif") + ((".avif",) if AVIF_SUPPORTED else ())
 
-st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide")
+st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", initial_sidebar_state="expanded")
 
 
 # ---------------------------------------------------------------------------
-# Логика кропа — перенесена из оригинального desktop-скрипта без изменений
+# Логика кропа
 # ---------------------------------------------------------------------------
 
 def smart_crop_with_margin(img, margin_px, size, background, fill_transparent=False):
@@ -55,13 +55,10 @@ def smart_crop_with_margin(img, margin_px, size, background, fill_transparent=Fa
 
         left_bound = int(width * 0.05)
         left_empty = all(is_empty_col(x) for x in range(left_bound)) if left_bound else True
-
         right_bound = width - int(width * 0.05)
         right_empty = all(is_empty_col(x) for x in range(width - 1, right_bound - 1, -1)) if right_bound < width else True
-
         top_bound = int(height * 0.05)
         top_empty = all(is_empty_row(y) for y in range(top_bound)) if top_bound else True
-
         bottom_bound = height - int(height * 0.05)
         bottom_empty = all(is_empty_row(y) for y in range(height - 1, bottom_bound - 1, -1)) if bottom_bound < height else True
 
@@ -128,13 +125,6 @@ def no_crop_with_margin(img, margin_px, size, background, fill_transparent=False
 
 
 def _get_bg_color(background, fill_transparent):
-    """Цвет заливки полей вокруг картинки.
-
-    Раньше поля всегда заливались прозрачным для PNG, даже если у исходного
-    фото были просто белые поля (например, webp без альфа-канала) — из-за
-    этого белые поля превращались в прозрачные. Теперь прозрачность
-    используется, только если формат PNG И пользователь явно её выбрал.
-    """
     if background == "PNG" and fill_transparent:
         return (0, 0, 0, 0)
     if background == "PNG":
@@ -219,65 +209,111 @@ def process_one(img, file_name, size, margin, crop_mode, fmt, manual_vals, fill_
 
 if "theme" not in st.session_state:
     st.session_state.theme = "Светлая"
+if "excluded_files" not in st.session_state:
+    st.session_state.excluded_files = set()
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
 
-DARK_CSS = """
+LIGHT_CSS = """
 <style>
-.stApp { background-color: #0e1117; color: #f0f2f6; }
-section[data-testid="stSidebar"] { background-color: #161a25; }
-[data-testid="stMarkdownContainer"], label, .stCaption, p, span { color: #f0f2f6 !important; }
-.stTextInput input, .stNumberInput input, div[data-baseweb="select"] > div {
-    background-color: #262730; color: #f0f2f6;
+:root {
+    --accent: #2563eb;
+    --accent-soft: #eff6ff;
+    --border: #e5e7eb;
+    --muted: #64748b;
+    --card: #ffffff;
+    --bg: #f6f8fb;
 }
-div[data-testid="stFileUploaderDropzone"] { background-color: #1c1f2a; }
-hr { border-color: #333; }
+.stApp { background: var(--bg); }
+.block-container { max-width: 1500px; padding-top: 2rem; padding-bottom: 3rem; }
+header[data-testid="stHeader"] { background: transparent; }
+section[data-testid="stSidebar"] { border-right: 1px solid var(--border); background: #fff; }
+section[data-testid="stSidebar"] > div { padding-top: 2rem; }
+.stTitle { letter-spacing: -0.03em; }
+.hero { padding: 0.25rem 0 1.2rem; }
+.hero h1 { margin-bottom: .25rem; font-size: 2.35rem; letter-spacing: -.04em; }
+.hero p { color: var(--muted); font-size: 1rem; margin-top: 0; }
+.section-title { font-size: 1.2rem; font-weight: 700; margin: 1.1rem 0 .55rem; }
+.upload-card { border: 1px solid var(--border); border-radius: 18px; padding: 1rem; background: var(--card); box-shadow: 0 5px 18px rgba(15,23,42,.04); }
+div[data-testid="stFileUploader"] { background: var(--card); border-radius: 16px; }
+div[data-testid="stFileUploaderDropzone"] { border: 2px dashed #cbd5e1; border-radius: 14px; background: #fafcff; min-height: 170px; }
+div[data-testid="stFileUploaderDropzone"]:hover { border-color: var(--accent); background: var(--accent-soft); }
+.file-card { border: 1px solid var(--border); border-radius: 14px; background: var(--card); padding: .8rem .95rem; margin: .35rem 0; }
+.file-name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta { color: var(--muted); font-size: .82rem; margin-top: .15rem; }
+.result-card { border: 1px solid var(--border); border-radius: 16px; background: var(--card); padding: 1rem; box-shadow: 0 5px 18px rgba(15,23,42,.04); min-height: 105px; }
+.result-icon { font-size: 1.9rem; }
+.result-name { font-weight: 650; overflow-wrap: anywhere; }
+.result-meta { color: var(--muted); font-size: .82rem; margin-top: .2rem; }
+.success-box { border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 14px; padding: .8rem 1rem; }
+[data-testid="stProgressBar"] > div > div { border-radius: 99px; }
+button[kind="primary"] { border-radius: 10px; }
 </style>
 """
 
-top_l, top_r = st.columns([5, 1])
-with top_l:
-    st.title("🖼️ Обработчик изображений")
-    st.caption("Обрезка с отступом, вписывание в квадратный холст, конвертация формата")
-with top_r:
-    st.session_state.theme = st.radio(
-        "Тема", ["Светлая", "Тёмная"],
-        index=0 if st.session_state.theme == "Светлая" else 1,
-        horizontal=True, label_visibility="collapsed",
-    )
+DARK_CSS = """
+<style>
+.stApp { background: #0b1020; color: #eef2ff; }
+.block-container { max-width: 1500px; }
+section[data-testid="stSidebar"] { background: #111827; border-right: 1px solid #273449; }
+[data-testid="stMarkdownContainer"], label, p, span, h1, h2, h3 { color: #eef2ff !important; }
+.hero p, .file-meta, .result-meta { color: #94a3b8 !important; }
+.upload-card, .file-card, .result-card { background: #111827; border-color: #273449; box-shadow: none; }
+div[data-testid="stFileUploaderDropzone"] { background: #0f172a; border-color: #475569; }
+div[data-testid="stFileUploaderDropzone"]:hover { background: #172033; border-color: #60a5fa; }
+.success-box { background: #052e16; border-color: #166534; }
+</style>
+"""
 
-if st.session_state.theme == "Тёмная":
-    st.markdown(DARK_CSS, unsafe_allow_html=True)
-
-if not AVIF_SUPPORTED:
-    st.warning("Поддержка AVIF не активна: в requirements.txt нет пакета `pillow-avif-plugin`.")
+st.markdown(DARK_CSS if st.session_state.theme == "Тёмная" else LIGHT_CSS, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.header("Параметры")
+    st.markdown("### ⚙️ Параметры")
+    st.caption("Настройки применяются ко всем загруженным изображениям.")
 
     size = st.number_input("Размер холста (px)", min_value=10, max_value=10000, value=1200, step=10)
-    margin = st.number_input("Отступ (px)", min_value=0, max_value=int(size // 2) - 1 if size > 1 else 0, value=min(10, max(0, size // 2 - 1)), step=1)
+    margin = st.number_input(
+        "Отступ (px)",
+        min_value=0,
+        max_value=int(size // 2) - 1 if size > 1 else 0,
+        value=min(10, max(0, size // 2 - 1)),
+        step=1,
+    )
 
-    fmt = st.radio("Формат", ["AUTO", "PNG", "JPG"], horizontal=True,
-                    help="AUTO — определяется по исходному расширению файла")
+    st.markdown("**Формат результата**")
+    fmt = st.radio(
+        "Формат",
+        ["AUTO", "PNG", "JPG"],
+        horizontal=True,
+        label_visibility="collapsed",
+        help="AUTO — определяется по исходному расширению файла.",
+    )
 
     fill_transparent = False
     if fmt in ("AUTO", "PNG"):
         fill_choice = st.radio(
-            "Цвет полей вокруг картинки",
+            "Цвет полей",
             ["Белый", "Прозрачный"],
             horizontal=True,
-            help="Прозрачный работает только для PNG. Для webp/gif/tiff в режиме AUTO по умолчанию используется белый, чтобы не терять белый фон исходника.",
+            help="Прозрачный работает только для PNG.",
         )
         fill_transparent = fill_choice == "Прозрачный"
 
+    st.markdown("**Режим обрезки**")
     crop_mode = st.radio(
-        "Режим обрезки",
+        "Режим",
         ["auto", "manual", "none"],
-        format_func=lambda v: {"auto": "Авто (обрезать пустые поля)", "manual": "Вручную (пиксели с каждой стороны)", "none": "Без обрезки"}[v],
+        format_func=lambda v: {
+            "auto": "Авто — убрать пустые поля",
+            "manual": "Вручную — указать пиксели",
+            "none": "Без обрезки",
+        }[v],
+        label_visibility="collapsed",
     )
 
     manual_vals = (0, 0, 0, 0)
     if crop_mode == "manual":
-        st.caption("Сколько пикселей срезать с каждой стороны:")
+        st.caption("Сколько пикселей срезать с каждой стороны")
         c1, c2 = st.columns(2)
         top = c1.number_input("Сверху", min_value=0, value=0, step=1)
         bottom = c2.number_input("Снизу", min_value=0, value=0, step=1)
@@ -286,60 +322,142 @@ with st.sidebar:
         manual_vals = (top, bottom, left, right)
 
     if margin * 2 >= size:
-        st.error("Отступ должен быть меньше половины размера холста")
+        st.error("Отступ должен быть меньше половины размера холста.")
 
-uploaded_files = st.file_uploader(
-    "Загрузите изображения",
-    type=[ext.strip(".") for ext in SUPPORTED_INPUTS],
-    accept_multiple_files=True,
+    st.divider()
+    theme = st.radio("Тема интерфейса", ["☀️ Светлая", "🌙 Тёмная"], index=0 if st.session_state.theme == "Светлая" else 1)
+    new_theme = "Тёмная" if "Тёмная" in theme else "Светлая"
+    if new_theme != st.session_state.theme:
+        st.session_state.theme = new_theme
+        st.rerun()
+
+# Header
+st.markdown(
+    '<div class="hero"><h1>🖼️ Обработчик изображений</h1>'
+    '<p>Обрезка с отступом · квадратный холст · конвертация формата</p></div>',
+    unsafe_allow_html=True,
 )
 
-if uploaded_files and margin * 2 < size:
-    results = []
-    progress_bar = st.progress(0.0)
-    status_text = st.empty()
-    total = len(uploaded_files)
+if not AVIF_SUPPORTED:
+    st.warning("Поддержка AVIF не активна: добавьте `pillow-avif-plugin` в requirements.txt, чтобы включить AVIF.")
 
-    for i, uf in enumerate(uploaded_files, start=1):
-        status_text.text(f"Обработка {i} из {total}: {uf.name}")
-        try:
-            img = Image.open(uf)
-            img.load()
-            out_name, buf, processed_img = process_one(
-                img, uf.name, int(size), int(margin), crop_mode, fmt, manual_vals, fill_transparent
+st.markdown('<div class="section-title">1. Загрузите изображения</div>', unsafe_allow_html=True)
+
+upload_key = f"image_uploader_{st.session_state.uploader_key}"
+uploaded_files = st.file_uploader(
+    "Перетащите изображения сюда или нажмите «Browse files»",
+    type=[ext.strip(".") for ext in SUPPORTED_INPUTS],
+    accept_multiple_files=True,
+    key=upload_key,
+    help="Поддерживаются PNG, JPG, WEBP, BMP, TIFF, GIF и AVIF (если установлен плагин).",
+)
+
+active_files = []
+for index, uf in enumerate(uploaded_files or []):
+    file_id = f"{uf.name}:{uf.size}:{index}"
+    if file_id not in st.session_state.excluded_files:
+        active_files.append((file_id, uf))
+
+if uploaded_files:
+    st.markdown('<div class="section-title">Загруженные файлы</div>', unsafe_allow_html=True)
+    st.caption(f"Выбрано: {len(active_files)} из {len(uploaded_files)}")
+
+    for file_id, uf in active_files:
+        col_info, col_action = st.columns([8, 1])
+        with col_info:
+            st.markdown(
+                f'<div class="file-card"><div class="file-name">📄 {uf.name}</div>'
+                f'<div class="file-meta">{uf.size / 1024:.1f} КБ · {Path(uf.name).suffix.upper().lstrip(".") or "FILE"}</div></div>',
+                unsafe_allow_html=True,
             )
-            results.append({"name": out_name, "buf": buf})
-        except Exception as e:
-            st.error(f"Ошибка при обработке {uf.name}: {e}")
-        progress_bar.progress(i / total)
+        with col_action:
+            st.write("")
+            if st.button("×", key=f"remove_{file_id}", help=f"Удалить {uf.name}"):
+                st.session_state.excluded_files.add(file_id)
+                st.rerun()
 
-    status_text.text(f"Готово: обработано {len(results)} из {total}")
+    controls_left, controls_right = st.columns([1, 4])
+    with controls_left:
+        if st.button("🗑️ Очистить список", use_container_width=True):
+            st.session_state.excluded_files = set()
+            st.session_state.uploader_key += 1
+            st.rerun()
+    with controls_right:
+        if active_files:
+            st.caption("Можно удалить отдельные файлы кнопкой × справа от имени.")
 
-    if results:
-        st.subheader(f"Результат ({len(results)})")
+st.markdown('<div class="section-title">2. Обработка</div>', unsafe_allow_html=True)
 
-        for r in results:
-            col1, col2 = st.columns([3, 1])
-            col1.write(r["name"])
-            col2.download_button(
-                "Скачать",
-                data=r["buf"].getvalue(),
-                file_name=r["name"],
-                mime="image/png" if r["name"].endswith(".png") else "image/jpeg",
-                key=f"dl_{r['name']}_{id(r)}",
+if active_files and margin * 2 < size:
+    if st.button("▶ Обработать изображения", type="primary", use_container_width=True):
+        results = []
+        progress_bar = st.progress(0.0, text="Подготовка…")
+        status_text = st.empty()
+        total = len(active_files)
+
+        for i, (_, uf) in enumerate(active_files, start=1):
+            status_text.markdown(f"**Обработка:** `{uf.name}` — {i} из {total}")
+            try:
+                img = Image.open(uf)
+                img.load()
+                out_name, buf, processed_img = process_one(
+                    img, uf.name, int(size), int(margin), crop_mode, fmt, manual_vals, fill_transparent
+                )
+                results.append(
+                    {
+                        "name": out_name,
+                        "buf": buf,
+                        "width": processed_img.width,
+                        "height": processed_img.height,
+                    }
+                )
+            except Exception as e:
+                st.error(f"Ошибка при обработке {uf.name}: {e}")
+            progress_bar.progress(i / total, text=f"Готово: {i} из {total}")
+
+        status_text.empty()
+        progress_bar.empty()
+
+        if results:
+            st.markdown('<div class="section-title">3. Результат</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="success-box">✓ Обработка завершена · <strong>{len(results)} из {total}</strong> файлов</div>',
+                unsafe_allow_html=True,
             )
+            st.write("")
 
-        if len(results) > 1:
-            zip_buf = io.BytesIO()
-            with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                for r in results:
-                    zf.writestr(r["name"], r["buf"].getvalue())
-            zip_buf.seek(0)
-            st.download_button(
-                "📦 Скачать все (ZIP)",
-                data=zip_buf.getvalue(),
-                file_name="processed_images.zip",
-                mime="application/zip",
-            )
+            cols = st.columns(min(3, len(results)))
+            for idx, result in enumerate(results):
+                with cols[idx % len(cols)]:
+                    st.markdown(
+                        f'<div class="result-card"><div class="result-icon">🖼️</div>'
+                        f'<div class="result-name">{result["name"]}</div>'
+                        f'<div class="result-meta">{result["width"]} × {result["height"]} px · {len(result["buf"].getvalue()) / 1024:.1f} КБ</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.download_button(
+                        "⬇️ Скачать",
+                        data=result["buf"].getvalue(),
+                        file_name=result["name"],
+                        mime="image/png" if result["name"].endswith(".png") else "image/jpeg",
+                        key=f"dl_{idx}_{result['name']}",
+                        use_container_width=True,
+                    )
+
+            if len(results) > 1:
+                zip_buf = io.BytesIO()
+                with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for result in results:
+                        zf.writestr(result["name"], result["buf"].getvalue())
+                zip_buf.seek(0)
+                st.write("")
+                st.download_button(
+                    "📦 Скачать всё (ZIP)",
+                    data=zip_buf.getvalue(),
+                    file_name="processed_images.zip",
+                    mime="application/zip",
+                    use_container_width=True,
+                    type="primary",
+                )
 else:
-    st.info("Загрузите одно или несколько изображений слева, чтобы начать.")
+    st.info("Добавьте одно или несколько изображений выше, чтобы начать обработку.")
