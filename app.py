@@ -5,9 +5,15 @@ from pathlib import Path
 import streamlit as st
 from PIL import Image
 
-APP_VERSION = "1.0"
+try:
+    import pillow_avif  # noqa: F401 — регистрирует поддержку чтения .avif в Pillow
+    AVIF_SUPPORTED = True
+except ImportError:
+    AVIF_SUPPORTED = False
+
+APP_VERSION = "1.1"
 APP_NAME = f"Обработчик изображений (веб) v{APP_VERSION}"
-SUPPORTED_INPUTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif")
+SUPPORTED_INPUTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif") + ((".avif",) if AVIF_SUPPORTED else ())
 
 st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide")
 
@@ -173,7 +179,7 @@ def get_effective_output_format(selected_format, file_name):
         return "PNG"
     if ext in (".jpg", ".jpeg"):
         return "JPG"
-    if ext in (".gif", ".webp", ".tif", ".tiff"):
+    if ext in (".gif", ".webp", ".tif", ".tiff", ".avif"):
         return "PNG"
     return "JPG"
 
@@ -211,8 +217,38 @@ def process_one(img, file_name, size, margin, crop_mode, fmt, manual_vals, fill_
 # UI
 # ---------------------------------------------------------------------------
 
-st.title("🖼️ Обработчик изображений")
-st.caption("Обрезка с отступом, вписывание в квадратный холст, конвертация формата")
+if "theme" not in st.session_state:
+    st.session_state.theme = "Светлая"
+
+DARK_CSS = """
+<style>
+.stApp { background-color: #0e1117; color: #f0f2f6; }
+section[data-testid="stSidebar"] { background-color: #161a25; }
+[data-testid="stMarkdownContainer"], label, .stCaption, p, span { color: #f0f2f6 !important; }
+.stTextInput input, .stNumberInput input, div[data-baseweb="select"] > div {
+    background-color: #262730; color: #f0f2f6;
+}
+div[data-testid="stFileUploaderDropzone"] { background-color: #1c1f2a; }
+hr { border-color: #333; }
+</style>
+"""
+
+top_l, top_r = st.columns([5, 1])
+with top_l:
+    st.title("🖼️ Обработчик изображений")
+    st.caption("Обрезка с отступом, вписывание в квадратный холст, конвертация формата")
+with top_r:
+    st.session_state.theme = st.radio(
+        "Тема", ["Светлая", "Тёмная"],
+        index=0 if st.session_state.theme == "Светлая" else 1,
+        horizontal=True, label_visibility="collapsed",
+    )
+
+if st.session_state.theme == "Тёмная":
+    st.markdown(DARK_CSS, unsafe_allow_html=True)
+
+if not AVIF_SUPPORTED:
+    st.warning("Поддержка AVIF не активна: в requirements.txt нет пакета `pillow-avif-plugin`.")
 
 with st.sidebar:
     st.header("Параметры")
@@ -260,7 +296,12 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files and margin * 2 < size:
     results = []
-    for uf in uploaded_files:
+    progress_bar = st.progress(0.0)
+    status_text = st.empty()
+    total = len(uploaded_files)
+
+    for i, uf in enumerate(uploaded_files, start=1):
+        status_text.text(f"Обработка {i} из {total}: {uf.name}")
         try:
             img = Image.open(uf)
             img.load()
@@ -270,6 +311,9 @@ if uploaded_files and margin * 2 < size:
             results.append({"name": out_name, "buf": buf})
         except Exception as e:
             st.error(f"Ошибка при обработке {uf.name}: {e}")
+        progress_bar.progress(i / total)
+
+    status_text.text(f"Готово: обработано {len(results)} из {total}")
 
     if results:
         st.subheader(f"Результат ({len(results)})")
