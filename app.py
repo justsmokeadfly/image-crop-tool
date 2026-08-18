@@ -16,9 +16,9 @@ st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide")
 # Логика кропа — перенесена из оригинального desktop-скрипта без изменений
 # ---------------------------------------------------------------------------
 
-def smart_crop_with_margin(img, margin_px, size, background):
+def smart_crop_with_margin(img, margin_px, size, background, fill_transparent=False):
     """Автоматическая обрезка пустых полей (близких к белому) по краям."""
-    bg_color = (255, 255, 255) if background == "JPG" else (0, 0, 0, 0)
+    bg_color = _get_bg_color(background, fill_transparent)
 
     if img.mode != "RGBA":
         img = img.convert("RGBA")
@@ -90,7 +90,7 @@ def smart_crop_with_margin(img, margin_px, size, background):
     return _finish_crop(img, bbox, margin_px, size, background, bg_color)
 
 
-def manual_crop_with_margin(img, margin_px, size, background, top, bottom, left, right):
+def manual_crop_with_margin(img, margin_px, size, background, top, bottom, left, right, fill_transparent=False):
     """Обрезка на заданное число пикселей с каждой стороны."""
     width, height = img.size
 
@@ -110,15 +110,30 @@ def manual_crop_with_margin(img, margin_px, size, background, top, bottom, left,
         new_bottom = new_top + 1
 
     bbox = (new_left, new_top, new_right, new_bottom)
-    bg_color = (255, 255, 255) if background == "JPG" else (0, 0, 0, 0)
+    bg_color = _get_bg_color(background, fill_transparent)
     return _finish_crop(img, bbox, margin_px, size, background, bg_color)
 
 
-def no_crop_with_margin(img, margin_px, size, background):
+def no_crop_with_margin(img, margin_px, size, background, fill_transparent=False):
     """Без обрезки — просто вписать изображение в холст с отступом."""
     bbox = (0, 0, img.width, img.height)
-    bg_color = (255, 255, 255) if background == "JPG" else (0, 0, 0, 0)
+    bg_color = _get_bg_color(background, fill_transparent)
     return _finish_crop(img, bbox, margin_px, size, background, bg_color)
+
+
+def _get_bg_color(background, fill_transparent):
+    """Цвет заливки полей вокруг картинки.
+
+    Раньше поля всегда заливались прозрачным для PNG, даже если у исходного
+    фото были просто белые поля (например, webp без альфа-канала) — из-за
+    этого белые поля превращались в прозрачные. Теперь прозрачность
+    используется, только если формат PNG И пользователь явно её выбрал.
+    """
+    if background == "PNG" and fill_transparent:
+        return (0, 0, 0, 0)
+    if background == "PNG":
+        return (255, 255, 255, 255)
+    return (255, 255, 255)
 
 
 def _finish_crop(img, bbox, margin_px, size, background, bg_color):
@@ -163,16 +178,16 @@ def get_effective_output_format(selected_format, file_name):
     return "JPG"
 
 
-def process_one(img, file_name, size, margin, crop_mode, fmt, manual_vals):
+def process_one(img, file_name, size, margin, crop_mode, fmt, manual_vals, fill_transparent):
     effective_format = get_effective_output_format(fmt, file_name)
 
     if crop_mode == "auto":
-        processed = smart_crop_with_margin(img, margin, size, effective_format)
+        processed = smart_crop_with_margin(img, margin, size, effective_format, fill_transparent)
     elif crop_mode == "manual":
         top, bottom, left, right = manual_vals
-        processed = manual_crop_with_margin(img, margin, size, effective_format, top, bottom, left, right)
+        processed = manual_crop_with_margin(img, margin, size, effective_format, top, bottom, left, right, fill_transparent)
     else:
-        processed = no_crop_with_margin(img, margin, size, effective_format)
+        processed = no_crop_with_margin(img, margin, size, effective_format, fill_transparent)
 
     if effective_format == "PNG":
         out_ext = ".png"
@@ -208,6 +223,16 @@ with st.sidebar:
     fmt = st.radio("Формат", ["AUTO", "PNG", "JPG"], horizontal=True,
                     help="AUTO — определяется по исходному расширению файла")
 
+    fill_transparent = False
+    if fmt in ("AUTO", "PNG"):
+        fill_choice = st.radio(
+            "Цвет полей вокруг картинки",
+            ["Белый", "Прозрачный"],
+            horizontal=True,
+            help="Прозрачный работает только для PNG. Для webp/gif/tiff в режиме AUTO по умолчанию используется белый, чтобы не терять белый фон исходника.",
+        )
+        fill_transparent = fill_choice == "Прозрачный"
+
     crop_mode = st.radio(
         "Режим обрезки",
         ["auto", "manual", "none"],
@@ -240,9 +265,9 @@ if uploaded_files and margin * 2 < size:
             img = Image.open(uf)
             img.load()
             out_name, buf, processed_img = process_one(
-                img, uf.name, int(size), int(margin), crop_mode, fmt, manual_vals
+                img, uf.name, int(size), int(margin), crop_mode, fmt, manual_vals, fill_transparent
             )
-            results.append({"name": out_name, "buf": buf, "original": img, "processed": processed_img})
+            results.append({"name": out_name, "buf": buf})
         except Exception as e:
             st.error(f"Ошибка при обработке {uf.name}: {e}")
 
@@ -250,19 +275,15 @@ if uploaded_files and margin * 2 < size:
         st.subheader(f"Результат ({len(results)})")
 
         for r in results:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.image(r["original"], caption=f"До: {r['name']}", use_container_width=True)
-            with col2:
-                st.image(r["processed"], caption=f"После: {r['name']}", use_container_width=True)
-            st.download_button(
-                f"Скачать {r['name']}",
+            col1, col2 = st.columns([3, 1])
+            col1.write(r["name"])
+            col2.download_button(
+                "Скачать",
                 data=r["buf"].getvalue(),
                 file_name=r["name"],
                 mime="image/png" if r["name"].endswith(".png") else "image/jpeg",
                 key=f"dl_{r['name']}_{id(r)}",
             )
-            st.divider()
 
         if len(results) > 1:
             zip_buf = io.BytesIO()
