@@ -13,7 +13,7 @@ try:
 except ImportError:
     AVIF_SUPPORTED = False
 
-APP_VERSION = "1.6"
+APP_VERSION = "1.7"
 APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 SUPPORTED_INPUTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif") + ((".avif",) if AVIF_SUPPORTED else ())
 st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", initial_sidebar_state="expanded")
@@ -92,7 +92,7 @@ COMMON = """
 .block-container{max-width:1540px;padding-top:1.6rem;padding-bottom:3rem}
 .hero h1{margin:0 0 .25rem;font-size:clamp(1.8rem,3vw,2.55rem);letter-spacing:-.04em}.hero p{opacity:.72;margin:0 0 1.25rem}
 .section-title{font-size:1.15rem;font-weight:750;margin:1.25rem 0 .55rem}
-.file-card,.result-card{border:1px solid var(--border);border-radius:14px;background:var(--card);padding:.75rem .9rem}.file-card{min-height:64px}.file-name,.result-name{font-weight:650;overflow-wrap:anywhere}.file-meta,.result-meta{font-size:.82rem;color:var(--muted);margin-top:.18rem}.result-card{min-height:100px;margin-bottom:.55rem}.result-icon{font-size:1.7rem;margin-bottom:.45rem}
+.file-card{border:1px solid var(--border);border-radius:14px;background:var(--card);padding:.75rem .9rem;min-height:64px}.file-name{font-weight:650;overflow-wrap:anywhere}.file-meta{font-size:.82rem;color:var(--muted);margin-top:.18rem}
 .success-box{border:1px solid var(--success-border);background:var(--success-bg);color:var(--success-text);border-radius:12px;padding:.75rem .95rem}
 .stButton button,.stDownloadButton button{border-radius:10px}.stDownloadButton button{min-height:2.55rem}
 [data-testid="stFileUploaderDropzone"]{background:var(--widget-bg)!important;border-color:var(--widget-border)!important;border-radius:14px;min-height:150px}
@@ -196,17 +196,12 @@ elif active and margin*2 >= size:
 
 if st.session_state.results:
     results=st.session_state.results
-    st.markdown('<div class="section-title">3. Результат</div>',unsafe_allow_html=True)
+    st.markdown('<div class="section-title">3. Скачать результат</div>',unsafe_allow_html=True)
     st.markdown(f'<div class="success-box">✓ Обработка завершена · <strong>{len(results)} файлов</strong></div>',unsafe_allow_html=True)
-    cols=st.columns(min(3,len(results)))
-    for i,r in enumerate(results):
-        with cols[i%len(cols)]:
-            st.markdown(f'<div class="result-card"><div class="result-icon">🖼️</div><div class="result-name">{r["name"]}</div><div class="result-meta">{r["width"]} × {r["height"]} px · {len(r["data"])/1024:.1f} КБ</div></div>',unsafe_allow_html=True)
-            st.download_button("⬇️ Скачать",r["data"],r["name"],r["mime"],key=f'download_{r["key"]}',use_container_width=True,on_click="ignore")
     z=io.BytesIO()
     with zipfile.ZipFile(z,"w",zipfile.ZIP_DEFLATED) as archive:
         for r in results: archive.writestr(r["name"],r["data"])
-    zip_filename = f"processed_images_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.zip"
-    st.download_button("📦 Скачать всё (ZIP)",z.getvalue(),zip_filename,"application/zip",use_container_width=True,type="primary",on_click="ignore")
+    archive_name=f"processed_images_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.zip"
+    st.download_button("📦 Скачать всё (ZIP)",z.getvalue(),archive_name,"application/zip",use_container_width=True,type="primary",on_click="ignore")
 elif not active:
     st.info("Добавьте одно или несколько изображений выше, чтобы начать обработку.")
