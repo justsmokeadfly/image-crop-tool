@@ -1,6 +1,7 @@
 import hashlib
 import io
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -12,7 +13,7 @@ try:
 except ImportError:
     AVIF_SUPPORTED = False
 
-APP_VERSION = "1.5"
+APP_VERSION = "1.6"
 APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 SUPPORTED_INPUTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif") + ((".avif",) if AVIF_SUPPORTED else ())
 st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", initial_sidebar_state="expanded")
@@ -205,6 +206,7 @@ if st.session_state.results:
     z=io.BytesIO()
     with zipfile.ZipFile(z,"w",zipfile.ZIP_DEFLATED) as archive:
         for r in results: archive.writestr(r["name"],r["data"])
-    st.download_button("📦 Скачать всё (ZIP)",z.getvalue(),"processed_images.zip","application/zip",use_container_width=True,type="primary",on_click="ignore")
+    zip_filename = f"processed_images_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.zip"
+    st.download_button("📦 Скачать всё (ZIP)",z.getvalue(),zip_filename,"application/zip",use_container_width=True,type="primary",on_click="ignore")
 elif not active:
     st.info("Добавьте одно или несколько изображений выше, чтобы начать обработку.")
