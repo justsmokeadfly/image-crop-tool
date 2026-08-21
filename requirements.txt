@@ -1,4 +1,3 @@
 streamlit
 Pillow
 pillow-avif-plugin
-rembg
