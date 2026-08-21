@@ -2,7 +2,9 @@
 
 > 🇷🇺 **Русская версия** · 🇬🇧 **English version**
 
-Простой и удобный веб-инструмент на **Streamlit** для пакетной обработки изображений и очистки ZIP-архивов.
+Простой веб-инструмент на **Streamlit** для пакетной обработки изображений и очистки ZIP-архивов.
+
+**Версия: 2.1**
 
 ## 🇷🇺 Русская версия
 
@@ -16,27 +18,26 @@
 - ✂️ Автоматическая обрезка пустых полей
 - 🎯 Ручная обрезка по четырём сторонам
 - ⬜ Режим без обрезки
-- 📐 Настройка размера квадратного холста
+- 📐 Настройка квадратного холста
 - ↔️ Настройка отступа
 - 🖼️ Экспорт в PNG или JPG
 - 🔲 Прозрачный фон для PNG
-- 📦 Скачивание всех результатов одним ZIP-архивом
-- 🗑️ Удаление отдельных файлов из списка
+- 📦 Скачивание нескольких результатов одним ZIP-архивом
 - 🌓 Светлая и тёмная тема
 - 🧩 Поддержка AVIF при наличии `pillow-avif-plugin`
 
 #### 📦 ZIP Cleaner
 
-Инструмент для быстрой очистки ZIP-архивов с изображениями.
+Быстрая очистка ZIP-архивов с изображениями.
 
-Обрабатываются только файлы, в имени которых есть **`_images_`**.
+Обрабатываются только файлы, содержащие **`_images_`** в имени.
 
-- ✅ Оставляет только основной файл с суффиксом `_images_1`
-- 🗑️ Удаляет остальные файлы `_images_2`, `_images_3` и т. д.
-- 🔄 Переименовывает первый файл в формат `{folder_name}_1.png`
-- 🖼️ При необходимости конвертирует выбранное изображение в **PNG**
-- 📦 Все обработанные изображения собираются в **один ZIP-архив**
-- 📂 Не создаёт множество отдельных папок с результатами
+- ✅ Оставляет только основной файл `_images_1`
+- 🗑️ Удаляет остальные `_images_2`, `_images_3` и т. д.
+- 🔄 Переименовывает основной файл в `{folder_name}_1.png`
+- 🖼️ Конвертирует основной файл в PNG
+- 📦 Собирает готовые PNG-файлы в один ZIP
+- 📂 Не создаёт отдельные папки для результатов
 - 🚫 Файлы без `_images_` не затрагиваются
 
 Пример:
@@ -49,15 +50,36 @@ product/
 └── other_file.txt         → игнорируется
 ```
 
+### 🛡️ Защита от старых результатов — v2.1
+
+Приложение больше не позволяет случайно скачать результат от **предыдущей загрузки**.
+
+Для каждой новой загрузки вычисляется **SHA-256 отпечаток содержимого** вместе с именем и размером файла.
+
+Если пользователь загружает другой файл:
+
+1. Старый результат автоматически удаляется из `session_state`.
+2. Старая кнопка скачивания исчезает.
+3. Результат появляется только после новой обработки.
+
+Защита работает **для обеих вкладок**:
+
+- ✂️ Image Crop Tool — старые обработанные изображения сбрасываются при изменении набора файлов.
+- 📦 ZIP Cleaner — старый очищенный ZIP сбрасывается при изменении исходного архива.
+
+Это предотвращает ситуацию, когда пользователь загрузил новый файл, но скачал результат предыдущей операции.
+
 ### 🔄 Логика ZIP Cleaner
 
-1. Инструмент получает ZIP-архив.
-2. Находит изображения с `_images_` в имени.
-3. Определяет файл `_images_1` как основной.
-4. Основной файл конвертируется в PNG и получает имя `{folder_name}_1.png`.
-5. Остальные `_images_` удаляются.
-6. Готовые PNG-файлы помещаются в новый ZIP-архив.
-7. Архив становится доступен для скачивания прямо из браузера.
+1. Пользователь загружает ZIP.
+2. Инструмент находит файлы с `_images_`.
+3. Файл `_images_1` определяется как основной.
+4. Основное изображение конвертируется в PNG.
+5. Оно получает имя `{folder_name}_1.png`.
+6. Остальные `_images_` удаляются.
+7. PNG-файлы собираются в один ZIP.
+8. Новый результат становится доступен для скачивания.
+9. При загрузке другого ZIP предыдущий результат автоматически сбрасывается.
 
 > **Важно:** `rembg` больше не используется и не требуется.
 
@@ -70,19 +92,10 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-После запуска приложение откроется в браузере.
-
 ### 🧪 Тесты
-
-Установка dev-зависимостей:
 
 ```bash
 pip install -r requirements-dev.txt
-```
-
-Запуск тестов:
-
-```bash
 pytest -q
 ```
 
@@ -92,13 +105,11 @@ GitHub Actions автоматически проверяет проект пос
 
 Проект готов для запуска через **Streamlit Community Cloud**.
 
-Параметры приложения:
-
 - **Repository:** `justsmokeadfly/image-crop-tool`
 - **Branch:** `main`
 - **Main file:** `app.py`
 
-Зависимости устанавливаются автоматически из `requirements.txt`.
+Зависимости устанавливаются из `requirements.txt`.
 
 ### 🛠️ Технологии
 
@@ -113,7 +124,7 @@ GitHub Actions автоматически проверяет проект пос
 
 **Image Crop Tool:** PNG, JPG, JPEG, WEBP, BMP, TIFF, GIF и AVIF.
 
-**ZIP Cleaner:** распространённые форматы изображений с автоматическим преобразованием выбранного файла в PNG.
+**ZIP Cleaner:** изображения с автоматическим преобразованием основного `_images_1` в PNG.
 
 ---
 
@@ -129,12 +140,11 @@ The application contains **two tabs**:
 - ✂️ Automatic empty-area cropping
 - 🎯 Manual cropping from four sides
 - ⬜ No-crop mode
-- 📐 Adjustable square canvas size
+- 📐 Adjustable square canvas
 - ↔️ Adjustable padding
 - 🖼️ Export to PNG or JPG
-- 🔲 Transparent background for PNG
-- 📦 Download all processed images as a single ZIP archive
-- 🗑️ Remove individual files from the list
+- 🔲 Transparent PNG background
+- 📦 Download multiple results as a single ZIP archive
 - 🌓 Light and dark themes
 - 🧩 AVIF support when `pillow-avif-plugin` is installed
 
@@ -146,9 +156,9 @@ Only files containing **`_images_`** in their filename are processed.
 
 - ✅ Keeps only the main `_images_1` file
 - 🗑️ Removes other `_images_2`, `_images_3`, etc.
-- 🔄 Renames the first image to `{folder_name}_1.png`
-- 🖼️ Converts the selected image to **PNG**
-- 📦 Packs all processed PNG files into **one ZIP archive**
+- 🔄 Renames the primary image to `{folder_name}_1.png`
+- 🖼️ Converts the primary image to PNG
+- 📦 Packs all processed PNG files into one ZIP archive
 - 📂 Does not create multiple output folders
 - 🚫 Files without `_images_` are ignored
 
@@ -162,15 +172,36 @@ product/
 └── other_file.txt         → ignored
 ```
 
+### 🛡️ Stale-result protection — v2.1
+
+The application now prevents accidental downloads of results from a **previous upload**.
+
+Each new upload gets a **SHA-256 content fingerprint**, combined with its filename and size.
+
+When the uploaded input changes:
+
+1. The previous result is automatically removed from `session_state`.
+2. The old download button disappears.
+3. A new download becomes available only after processing the new input.
+
+The protection covers **both tabs**:
+
+- ✂️ Image Crop Tool — previous processed images are cleared when the uploaded set changes.
+- 📦 ZIP Cleaner — the previous cleaned ZIP is cleared when the source archive changes.
+
+This prevents downloading an old result after uploading a new file.
+
 ### 🔄 ZIP Cleaner workflow
 
 1. Upload a ZIP archive.
 2. Find image files containing `_images_`.
-3. Detect the `_images_1` file as the primary image.
-4. Convert the primary image to PNG and rename it to `{folder_name}_1.png`.
-5. Remove all other `_images_` variants.
-6. Pack the resulting PNG files into a new ZIP archive.
-7. Download the cleaned archive directly from the browser.
+3. Detect `_images_1` as the primary image.
+4. Convert the primary image to PNG.
+5. Rename it to `{folder_name}_1.png`.
+6. Remove all other `_images_` variants.
+7. Pack the resulting PNG files into one ZIP archive.
+8. Make the new result available for download.
+9. Automatically clear the previous result when another ZIP is uploaded.
 
 > **Note:** `rembg` is no longer used or required.
 
@@ -183,19 +214,10 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The application will open in your browser.
-
 ### 🧪 Tests
-
-Install development dependencies:
 
 ```bash
 pip install -r requirements-dev.txt
-```
-
-Run tests:
-
-```bash
 pytest -q
 ```
 
@@ -203,9 +225,7 @@ GitHub Actions automatically validates the project after changes.
 
 ### ☁️ Streamlit Community Cloud
 
-The project is ready to run on **Streamlit Community Cloud**.
-
-Application settings:
+The project is ready for **Streamlit Community Cloud**.
 
 - **Repository:** `justsmokeadfly/image-crop-tool`
 - **Branch:** `main`
@@ -226,7 +246,7 @@ Dependencies are installed automatically from `requirements.txt`.
 
 **Image Crop Tool:** PNG, JPG, JPEG, WEBP, BMP, TIFF, GIF and AVIF.
 
-**ZIP Cleaner:** common image formats with automatic conversion of the selected image to PNG.
+**ZIP Cleaner:** image formats with automatic conversion of the primary `_images_1` image to PNG.
 
 ---
 
