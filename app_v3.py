@@ -202,7 +202,8 @@ with zip_tab:
                     lambda done, count: progress.progress(done / max(1, count), text=f"Упаковано {done}/{count}"),
                 )
                 st.session_state.cleaned_zip = result
-                st.session_state.cleaned_zip_name = f"{Path(zip_file.name).stem}_cleaned.zip"
+                # Give ZIP Cleaner its own descriptive download name.
+                st.session_state.cleaned_zip_name = "cleaned_images.zip"
                 st.session_state.cleaned_zip_stats = stats
                 st.success(
                     f"Готово. Конвертировано в PNG: {stats.get('converted', 0)}; "
