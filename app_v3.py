@@ -1,4 +1,6 @@
 import io
+import os
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -111,32 +113,88 @@ def process_image(data, name, size, margin, mode, fmt, manual, transparent):
     return out_name, buf.getvalue(), mime
 
 
-def clean_zip_bytes(zip_bytes, keep_first, progress_callback=None):
+def _zip_folder_name(filename: str) -> str:
+    """Return the name of the parent folder for a ZIP member."""
+    parent = Path(filename).parent
+    name = parent.name
+    return "" if name == "." else name
+
+
+def _zip_clean_target_name(filename: str) -> str | None:
+    """Return the cleaned target name for *_images_1 files, or None."""
+    path = Path(filename)
+    stem = path.stem
+    if "_images_" not in stem or not stem.endswith("_images_1"):
+        return None
+    folder_name = _zip_folder_name(filename)
+    if not folder_name:
+        return None
+    return f"{folder_name}_1{path.suffix}"
+
+
+def clean_zip_bytes(zip_bytes, progress_callback=None):
+    """Clean files matching the image naming convention inside a ZIP.
+
+    Rules:
+    - Only filenames containing ``_images_`` are candidates.
+    - ``*_images_1.ext`` is kept and renamed to ``{parent_folder}_1.ext``.
+    - Other ``*_images_*`` files are deleted.
+    - Files without ``_images_`` are untouched.
+    - Existing target files cause the source first image to be removed and skipped.
+    - Renames use ``os.replace`` on the extracted working tree.
+    - No background-removal library is used.
+    """
     output = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as src, zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as dst:
-        infos = [info for info in src.infolist() if not info.is_dir()]
-        first_by_folder = {}
-        for info in infos:
-            if Path(info.filename).suffix.lower() in ZIP_IMAGE_EXTENSIONS:
-                folder = str(Path(info.filename).parent).replace("\\", "/")
-                first_by_folder.setdefault(folder, info.filename)
+    stats = {"scanned": 0, "candidates": 0, "renamed": 0, "deleted": 0, "skipped_existing": 0}
 
-        tasks = []
-        removed = 0
-        for info in infos:
-            ext = Path(info.filename).suffix.lower()
-            folder = str(Path(info.filename).parent).replace("\\", "/")
-            if keep_first and ext in ZIP_IMAGE_EXTENSIONS and first_by_folder.get(folder) != info.filename:
-                removed += 1
-                continue
-            tasks.append(info)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as src:
+            src.extractall(temp_dir)
 
-        total = len(tasks)
-        for processed, info in enumerate(tasks, 1):
-            dst.writestr(info, src.read(info))
-            if progress_callback:
-                progress_callback(processed, total)
-    return output.getvalue(), total, removed
+        for root, _, files in os.walk(temp_dir):
+            for file_name in files:
+                stats["scanned"] += 1
+                if "_images_" not in Path(file_name).stem:
+                    continue
+                stats["candidates"] += 1
+
+                source_path = os.path.join(root, file_name)
+                stem = Path(file_name).stem
+                if not stem.endswith("_images_1"):
+                    os.remove(source_path)
+                    stats["deleted"] += 1
+                    continue
+
+                folder_name = os.path.basename(root)
+                if not folder_name:
+                    continue
+                target_path = os.path.join(root, f"{folder_name}_1{Path(file_name).suffix}")
+
+                if os.path.normcase(os.path.abspath(source_path)) == os.path.normcase(os.path.abspath(target_path)):
+                    continue
+
+                if os.path.exists(target_path):
+                    os.remove(source_path)
+                    stats["skipped_existing"] += 1
+                    continue
+
+                os.replace(source_path, target_path)
+                stats["renamed"] += 1
+
+        files_to_write = []
+        for root, _, files in os.walk(temp_dir):
+            for file_name in files:
+                file_path = os.path.join(root, file_name)
+                files_to_write.append((file_path, os.path.relpath(file_path, temp_dir)))
+
+        total = len(files_to_write)
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as dst:
+            for processed, (file_path, arcname) in enumerate(files_to_write, 1):
+                dst.write(file_path, arcname)
+                if progress_callback:
+                    progress_callback(processed, total)
+
+    return output.getvalue(), stats
 
 
 crop_tab, zip_tab = st.tabs(["✂️ Обрезка изображений", "🧹 Очистка ZIP"])
@@ -184,25 +242,39 @@ with crop_tab:
 
 with zip_tab:
     st.subheader("Очистка ZIP-архивов")
-    st.caption("Очистка структуры ZIP без удаления фона: можно сохранить только первое изображение в каждой папке.")
+    st.caption("Оставляет только *_images_1 в каждой папке, переименовывает его в имя папки_1 и удаляет остальные *_images_* файлы. Остальные файлы не трогаются.")
     zip_file = st.file_uploader("Загрузите исходный ZIP-архив", type=["zip"], key="clean_zip_upload")
-    keep_first = st.checkbox("Оставлять только первое фото в каждой папке", value=False)
     if zip_file:
         st.info(f"Архив: **{zip_file.name}** · {zip_file.size / 1024 / 1024:.2f} МБ")
         if st.button("🧹 Очистить ZIP", type="primary", use_container_width=True):
             progress = st.progress(0, text="Подготовка…")
             try:
-                result, total, removed = clean_zip_bytes(zip_file.getvalue(), keep_first, lambda done, count: progress.progress(done / max(1, count), text=f"Обработано {done}/{count}"))
+                result, stats = clean_zip_bytes(
+                    zip_file.getvalue(),
+                    lambda done, count: progress.progress(done / max(1, count), text=f"Упаковано {done}/{count}"),
+                )
                 st.session_state.cleaned_zip = result
                 st.session_state.cleaned_zip_name = f"{Path(zip_file.name).stem}_cleaned.zip"
-                st.session_state.cleaned_zip_stats = (total, removed)
-                st.success(f"Готово. Файлов сохранено: {total}; исключено: {removed}.")
+                st.session_state.cleaned_zip_stats = stats
+                st.success(
+                    f"Готово. Переименовано: {stats['renamed']}; "
+                    f"удалено лишних: {stats['deleted']}; "
+                    f"пропущено из-за существующего имени: {stats['skipped_existing']}."
+                )
             except Exception as exc:
                 st.error(f"Не удалось обработать ZIP: {exc}")
             finally:
                 progress.empty()
 
     if st.session_state.get("cleaned_zip"):
+        stats = st.session_state.get("cleaned_zip_stats", {})
+        if stats:
+            st.caption(
+                f"Проверено: {stats.get('scanned', 0)} · "
+                f"кандидатов: {stats.get('candidates', 0)} · "
+                f"переименовано: {stats.get('renamed', 0)} · "
+                f"удалено: {stats.get('deleted', 0)}"
+            )
         st.download_button("⬇️ Скачать очищенный ZIP", st.session_state.cleaned_zip, file_name=st.session_state.cleaned_zip_name, mime="application/zip", use_container_width=True)
 
 st.divider()
