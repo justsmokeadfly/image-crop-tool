@@ -116,6 +116,8 @@ def test_clean_zip_keeps_only_first_image_per_folder():
     result, total, removed = clean_zip_bytes(source.getvalue(), keep_first=True)
 
     with zipfile.ZipFile(io.BytesIO(result)) as archive:
-        assert archive.namelist() == ["a/01.jpg", "a/info.txt", "b/01.jpg"]
+        # clean_zip_bytes intentionally preserves the original archive order;
+        # it removes files but does not reorder the remaining entries.
+        assert archive.namelist() == ["a/01.jpg", "b/01.jpg", "a/info.txt"]
     assert total == 3
     assert removed == 2
