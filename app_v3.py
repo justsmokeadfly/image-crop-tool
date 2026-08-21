@@ -1,3 +1,4 @@
+import hashlib
 import io
 import zipfile
 from pathlib import Path
@@ -13,7 +14,7 @@ except ImportError:
 
 from clean_zip import clean_zip_bytes
 
-APP_VERSION = "2.0"
+APP_VERSION = "2.1"
 APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"] + (["avif"] if AVIF_SUPPORTED else [])
 
@@ -47,6 +48,35 @@ with st.sidebar:
 
 st.markdown(DARK if st.session_state.theme == "Тёмная" else LIGHT, unsafe_allow_html=True)
 st.markdown('<div class="hero"><h1>🖼️ Обработчик изображений</h1><p>Обрезка изображений и очистка ZIP-архивов в одном интерфейсе</p></div>', unsafe_allow_html=True)
+
+
+def content_hash(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def crop_upload_signature(uploaded):
+    if not uploaded:
+        return None
+    return tuple((uf.name, uf.size, content_hash(uf.getvalue())) for uf in uploaded)
+
+
+def reset_crop_results_if_input_changed(uploaded):
+    signature = crop_upload_signature(uploaded)
+    previous = st.session_state.get("crop_input_signature")
+    if signature != previous:
+        st.session_state.crop_input_signature = signature
+        st.session_state.pop("crop_results", None)
+        st.session_state.pop("crop_errors", None)
+
+
+def reset_cleaned_zip_if_input_changed(zip_file):
+    signature = None if zip_file is None else (zip_file.name, zip_file.size, content_hash(zip_file.getvalue()))
+    previous = st.session_state.get("clean_zip_input_signature")
+    if signature != previous:
+        st.session_state.clean_zip_input_signature = signature
+        st.session_state.pop("cleaned_zip", None)
+        st.session_state.pop("cleaned_zip_name", None)
+        st.session_state.pop("cleaned_zip_stats", None)
 
 
 def trim_background(img: Image.Image, threshold: int = 18):
@@ -129,6 +159,7 @@ with crop_tab:
             manual = (a.number_input("Сверху", 0, 100000, 0), b.number_input("Снизу", 0, 100000, 0), c.number_input("Слева", 0, 100000, 0), d.number_input("Справа", 0, 100000, 0))
 
     uploaded = st.file_uploader("Загрузите изображения", type=IMAGE_EXTENSIONS, accept_multiple_files=True, key="crop_upload")
+    reset_crop_results_if_input_changed(uploaded)
     if uploaded and st.button("▶ Обработать изображения", type="primary", use_container_width=True):
         results, errors = [], []
         progress = st.progress(0, text="Подготовка…")
@@ -140,6 +171,7 @@ with crop_tab:
             progress.progress(i / len(uploaded), text=f"Обработано {i}/{len(uploaded)}")
         progress.empty()
         st.session_state.crop_results = results
+        st.session_state.crop_errors = errors
         if errors:
             st.error("\n".join(errors))
 
@@ -159,6 +191,7 @@ with zip_tab:
     st.subheader("Очистка ZIP-архивов")
     st.caption("Оставляет только *_images_1 в каждой папке, конвертирует его в PNG, переименовывает в имя папки_1.png и удаляет остальные *_images_* файлы.")
     zip_file = st.file_uploader("Загрузите исходный ZIP-архив", type=["zip"], key="clean_zip_upload")
+    reset_cleaned_zip_if_input_changed(zip_file)
     if zip_file:
         st.info(f"Архив: **{zip_file.name}** · {zip_file.size / 1024 / 1024:.2f} МБ")
         if st.button("🧹 Очистить ZIP", type="primary", use_container_width=True):
