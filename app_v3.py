@@ -1,4 +1,5 @@
 import hashlib
+import html
 import io
 import zipfile
 from pathlib import Path
@@ -14,9 +15,13 @@ except ImportError:
 
 from clean_zip import clean_zip_bytes
 
-APP_VERSION = "2.1"
+APP_VERSION = "2.2"
 APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"] + (["avif"] if AVIF_SUPPORTED else [])
+MAX_IMAGE_FILES = 30
+MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024
+MAX_IMAGE_PIXELS = 100_000_000
+MAX_ZIP_BYTES = 100 * 1024 * 1024
 
 st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", initial_sidebar_state="collapsed")
 
@@ -120,6 +125,9 @@ def crop_to_square(img, bbox, margin, size, fmt, transparent):
 
 
 def process_image(data, name, size, margin, mode, fmt, manual, transparent):
+    if len(data) > MAX_IMAGE_FILE_BYTES:
+        raise ValueError(f"Файл слишком большой: максимум {MAX_IMAGE_FILE_BYTES // (1024 * 1024)} МБ")
+    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
     img = Image.open(io.BytesIO(data))
     img.load()
     ext = Path(name).suffix.lower()
@@ -160,6 +168,13 @@ with crop_tab:
 
     uploaded = st.file_uploader("Загрузите изображения", type=IMAGE_EXTENSIONS, accept_multiple_files=True, key="crop_upload")
     reset_crop_results_if_input_changed(uploaded)
+    if uploaded and len(uploaded) > MAX_IMAGE_FILES:
+        st.error(f"Слишком много файлов. Максимум за один запуск: {MAX_IMAGE_FILES}.")
+        uploaded = uploaded[:MAX_IMAGE_FILES]
+    if uploaded:
+        oversized = [uf.name for uf in uploaded if uf.size > MAX_IMAGE_FILE_BYTES]
+        if oversized:
+            st.warning(f"Файлы больше {MAX_IMAGE_FILE_BYTES // (1024 * 1024)} МБ будут пропущены: {', '.join(oversized[:5])}")
     if uploaded and st.button("▶ Обработать изображения", type="primary", use_container_width=True):
         results, errors = [], []
         progress = st.progress(0, text="Подготовка…")
@@ -194,7 +209,9 @@ with zip_tab:
     reset_cleaned_zip_if_input_changed(zip_file)
     if zip_file:
         st.info(f"Архив: **{zip_file.name}** · {zip_file.size / 1024 / 1024:.2f} МБ")
-        if st.button("🧹 Очистить ZIP", type="primary", use_container_width=True):
+        if zip_file.size > MAX_ZIP_BYTES:
+            st.error(f"ZIP слишком большой. Максимальный размер: {MAX_ZIP_BYTES // (1024 * 1024)} МБ.")
+        elif st.button("🧹 Очистить ZIP", type="primary", use_container_width=True):
             progress = st.progress(0, text="Подготовка…")
             try:
                 result, stats = clean_zip_bytes(
