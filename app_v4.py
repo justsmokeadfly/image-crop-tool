@@ -30,9 +30,38 @@ st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", init
 if "theme" not in st.session_state:
     st.session_state.theme = "Светлая"
 
+# Explicit theme styles: Streamlit's native theme does not automatically follow a custom radio.
+if st.session_state.theme == "Тёмная":
+    st.markdown("""
+    <style>
+    :root { color-scheme: dark; }
+    .stApp, [data-testid="stAppViewContainer"] { background:#0e1117; color:#f0f2f6; }
+    .block-container, .block-container * { color:#e6edf3; }
+    .hero p, [data-testid="stCaptionContainer"], .stCaption { color:#b8c0cc !important; }
+    [data-testid="stFileUploaderDropzone"] { background:#161b22 !important; border-color:#3b4350 !important; }
+    [data-testid="stFileUploaderDropzone"] * { color:#e6edf3 !important; }
+    [data-testid="stExpander"] { background:#161b22; border-color:#30363d; }
+    [data-testid="stTabs"] button { color:#c9d1d9 !important; }
+    [data-testid="stTabs"] button[aria-selected="true"] { color:#ffffff !important; }
+    input, textarea, [data-baseweb="select"] > div { color:#f0f2f6 !important; background:#161b22 !important; }
+    [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] span, label { color:#e6edf3; }
+    </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <style>
+    :root { color-scheme: light; }
+    .stApp { background:#ffffff; color:#262730; }
+    </style>
+    """, unsafe_allow_html=True)
+
 with st.sidebar:
     theme = st.radio("Тема", ["☀️ Светлая", "🌙 Тёмная"], horizontal=True, index=0 if st.session_state.theme == "Светлая" else 1)
-    st.session_state.theme = "Тёмная" if "Тёмная" in theme else "Светлая"
+    new_theme = "Тёмная" if "Тёмная" in theme else "Светлая"
+    if new_theme != st.session_state.theme:
+        st.session_state.theme = new_theme
+        st.rerun()
 
 st.markdown("""
 <style>
