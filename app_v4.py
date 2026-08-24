@@ -30,7 +30,6 @@ st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", init
 if "theme" not in st.session_state:
     st.session_state.theme = "Светлая"
 
-# Explicit theme styles: Streamlit's native theme does not automatically follow a custom radio.
 if st.session_state.theme == "Тёмная":
     st.markdown("""
     <style>
@@ -38,12 +37,37 @@ if st.session_state.theme == "Тёмная":
     .stApp, [data-testid="stAppViewContainer"] { background:#0e1117; color:#f0f2f6; }
     .block-container, .block-container * { color:#e6edf3; }
     .hero p, [data-testid="stCaptionContainer"], .stCaption { color:#b8c0cc !important; }
+
+    /* Expander */
+    [data-testid="stExpander"] { background:#161b22 !important; border:1px solid #30363d !important; }
+    [data-testid="stExpander"] details,
+    [data-testid="stExpander"] details > summary,
+    [data-testid="stExpander"] details > div { background:#161b22 !important; }
+    [data-testid="stExpander"] summary { color:#e6edf3 !important; }
+    [data-testid="stExpander"] summary * { color:#e6edf3 !important; }
+
+    /* File uploader */
     [data-testid="stFileUploaderDropzone"] { background:#161b22 !important; border-color:#3b4350 !important; }
     [data-testid="stFileUploaderDropzone"] * { color:#e6edf3 !important; }
-    [data-testid="stExpander"] { background:#161b22; border-color:#30363d; }
+    [data-testid="stFileUploaderDropzone"] button,
+    [data-testid="stFileUploaderDropzone"] [role="button"] {
+        background:#21262d !important;
+        color:#e6edf3 !important;
+        border:1px solid #3b4350 !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button:hover,
+    [data-testid="stFileUploaderDropzone"] [role="button"]:hover { background:#30363d !important; }
+
+    /* Inputs / BaseWeb controls */
+    input, textarea, [data-baseweb="select"] > div,
+    [data-baseweb="input"] > div, [data-baseweb="base-input"] > div {
+        color:#f0f2f6 !important; background:#161b22 !important; border-color:#3b4350 !important;
+    }
+    [data-baseweb="select"] *, [data-baseweb="input"] *, [data-baseweb="base-input"] * { color:#e6edf3 !important; }
+
+    /* Tabs and text */
     [data-testid="stTabs"] button { color:#c9d1d9 !important; }
     [data-testid="stTabs"] button[aria-selected="true"] { color:#ffffff !important; }
-    input, textarea, [data-baseweb="select"] > div { color:#f0f2f6 !important; background:#161b22 !important; }
     [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
     [data-testid="stMarkdownContainer"] span, label { color:#e6edf3; }
     </style>
