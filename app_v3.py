@@ -21,6 +21,7 @@ APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"] + (["avif"] if AVIF_SUPPORTED else [])
 MAX_IMAGE_FILES = 30
 MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024
+MAX_IMAGE_TOTAL_BYTES = 100 * 1024 * 1024
 MAX_IMAGE_PIXELS = 100_000_000
 MAX_ZIP_BYTES = 100 * 1024 * 1024
 
@@ -58,12 +59,6 @@ st.markdown('<div class="hero"><h1>🖼️ Обработчик изображе
 
 def content_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def unique_archive_name(prefix: str) -> str:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    token = secrets.token_hex(4)
-    return f"{prefix}_{timestamp}_{token}.zip"
 
 
 def crop_upload_signature(uploaded):
@@ -157,6 +152,11 @@ def process_image(data, name, size, margin, mode, fmt, manual, transparent):
     return out_name, buf.getvalue(), mime
 
 
+def unique_archive_name(prefix: str) -> str:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return f"{prefix}_{stamp}_{secrets.token_hex(4)}.zip"
+
+
 crop_tab, zip_tab = st.tabs(["✂️ Обрезка изображений", "🧹 Очистка ZIP"])
 
 with crop_tab:
@@ -180,9 +180,12 @@ with crop_tab:
         uploaded = uploaded[:MAX_IMAGE_FILES]
     if uploaded:
         oversized = [uf.name for uf in uploaded if uf.size > MAX_IMAGE_FILE_BYTES]
+        total_size = sum(uf.size for uf in uploaded)
+        if total_size > MAX_IMAGE_TOTAL_BYTES:
+            st.error(f"Общий размер выбранных файлов слишком большой: максимум {MAX_IMAGE_TOTAL_BYTES // (1024 * 1024)} МБ.")
         if oversized:
             st.warning(f"Файлы больше {MAX_IMAGE_FILE_BYTES // (1024 * 1024)} МБ будут пропущены: {', '.join(oversized[:5])}")
-    if uploaded and st.button("▶ Обработать изображения", type="primary", use_container_width=True):
+    if uploaded and len(uploaded) <= MAX_IMAGE_FILES and sum(uf.size for uf in uploaded) <= MAX_IMAGE_TOTAL_BYTES and st.button("▶ Обработать изображения", type="primary", use_container_width=True):
         results, errors = [], []
         progress = st.progress(0, text="Подготовка…")
         for i, uf in enumerate(uploaded, 1):
