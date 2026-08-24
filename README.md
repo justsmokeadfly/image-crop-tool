@@ -1,89 +1,74 @@
 # 🖼️ Image Crop Tool & ZIP Cleaner
 
-> 🇷🇺 **Русская версия** · 🇬🇧 **English version**
+> 🇷🇺 Русская версия · 🇬🇧 English version
 
-Простой веб-инструмент на **Streamlit** для пакетной обработки изображений и очистки ZIP-архивов.
+Веб-инструмент на **Streamlit** для пакетной обработки изображений и очистки ZIP-архивов.
 
-**Версия: 2.1**
+**Версия: 2.4**
 
-## 🇷🇺 Русская версия
+## 🇷🇺 Возможности
 
-### ✨ Возможности
-
-Приложение состоит из **двух вкладок**:
-
-#### ✂️ Image Crop Tool
+### ✂️ Обрезка изображений
 
 - 📁 Загрузка нескольких изображений одновременно
+- 🗑️ Кнопка **«Очистить загруженные изображения»** — можно одним нажатием удалить текущий набор и выбрать новый
 - ✂️ Автоматическая обрезка пустых полей
 - 🎯 Ручная обрезка по четырём сторонам
 - ⬜ Режим без обрезки
-- 📐 Настройка квадратного холста
+- 📐 Квадратный холст 1200×1200 или 1000×1000 px
 - ↔️ Настройка отступа
 - 🖼️ Экспорт в PNG или JPG
 - 🔲 Прозрачный фон для PNG
-- 📦 Скачивание нескольких результатов одним ZIP-архивом
+- 📦 Несколько результатов скачиваются одним ZIP
 - 🌓 Светлая и тёмная тема
-- 🧩 Поддержка AVIF при наличии `pillow-avif-plugin`
+- 🧩 AVIF при установленном `pillow-avif-plugin`
 
-#### 📦 ZIP Cleaner
+### 📦 ZIP Cleaner
 
-Быстрая очистка ZIP-архивов с изображениями.
-
-Обрабатываются только файлы, содержащие **`_images_`** в имени.
-
-- ✅ Оставляет только основной файл `_images_1`
+- ✅ Оставляет основной `_images_1`
 - 🗑️ Удаляет остальные `_images_2`, `_images_3` и т. д.
 - 🔄 Переименовывает основной файл в `{folder_name}_1.png`
 - 🖼️ Конвертирует основной файл в PNG
-- 📦 Собирает готовые PNG-файлы в один ZIP
-- 📂 Не создаёт отдельные папки для результатов
+- 📦 Собирает результат в один ZIP
 - 🚫 Файлы без `_images_` не затрагиваются
+- 🔢 Максимум **30 файлов** в исходном ZIP
+- 💾 Максимум **100 МБ** на исходный ZIP
 
-Пример:
+## 🛡️ Ограничения и защита
+
+Приложение рассчитано на работу через **Streamlit Community Cloud**.
+
+### Изображения
+
+- максимум **30 изображений** за один запуск;
+- максимум **50 МБ на один файл**;
+- максимум **100 МБ суммарно**;
+- максимум **5000×5000 px**;
+- результаты предыдущей загрузки автоматически сбрасываются при изменении входных файлов;
+- для входных файлов используется SHA-256 отпечаток содержимого.
+
+### ZIP Cleaner
+
+- максимум **100 МБ** исходного ZIP;
+- максимум **30 файлов** в архиве;
+- защита от небезопасных путей при обработке ZIP;
+- результат предыдущего архива автоматически сбрасывается при загрузке нового;
+- скачиваемый ZIP получает уникальное имя.
+
+### 🎲 Имена ZIP
+
+Каждый скачиваемый архив получает имя с датой, временем и случайным идентификатором, например:
 
 ```text
-product/
-├── product_images_1.jpg   → product_1.png
-├── product_images_2.jpg   → удаляется
-├── product_images_3.webp  → удаляется
-└── other_file.txt         → игнорируется
+processed_images_20260824_151530_a1b2c3d4.zip
+cleaned_images_20260824_151545_f8e7d6c5.zip
 ```
 
-### 🛡️ Защита от старых результатов — v2.1
+## 🔄 Защита от старых результатов
 
-Приложение больше не позволяет случайно скачать результат от **предыдущей загрузки**.
+При изменении загруженных файлов предыдущий результат удаляется из `session_state`. Это не позволяет случайно скачать результат от предыдущей операции.
 
-Для каждой новой загрузки вычисляется **SHA-256 отпечаток содержимого** вместе с именем и размером файла.
-
-Если пользователь загружает другой файл:
-
-1. Старый результат автоматически удаляется из `session_state`.
-2. Старая кнопка скачивания исчезает.
-3. Результат появляется только после новой обработки.
-
-Защита работает **для обеих вкладок**:
-
-- ✂️ Image Crop Tool — старые обработанные изображения сбрасываются при изменении набора файлов.
-- 📦 ZIP Cleaner — старый очищенный ZIP сбрасывается при изменении исходного архива.
-
-Это предотвращает ситуацию, когда пользователь загрузил новый файл, но скачал результат предыдущей операции.
-
-### 🔄 Логика ZIP Cleaner
-
-1. Пользователь загружает ZIP.
-2. Инструмент находит файлы с `_images_`.
-3. Файл `_images_1` определяется как основной.
-4. Основное изображение конвертируется в PNG.
-5. Оно получает имя `{folder_name}_1.png`.
-6. Остальные `_images_` удаляются.
-7. PNG-файлы собираются в один ZIP.
-8. Новый результат становится доступен для скачивания.
-9. При загрузке другого ZIP предыдущий результат автоматически сбрасывается.
-
-> **Важно:** `rembg` больше не используется и не требуется.
-
-### 🚀 Запуск локально
+## 🚀 Запуск локально
 
 ```bash
 git clone https://github.com/justsmokeadfly/image-crop-tool.git
@@ -92,18 +77,16 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### 🧪 Тесты
+## 🧪 Тесты
 
 ```bash
 pip install -r requirements-dev.txt
 pytest -q
 ```
 
-GitHub Actions автоматически проверяет проект после изменений.
+GitHub Actions автоматически запускает тесты после изменений.
 
-### ☁️ Streamlit Community Cloud
-
-Проект готов для запуска через **Streamlit Community Cloud**.
+## ☁️ Streamlit Community Cloud
 
 - **Repository:** `justsmokeadfly/image-crop-tool`
 - **Branch:** `main`
@@ -111,7 +94,9 @@ GitHub Actions автоматически проверяет проект пос
 
 Зависимости устанавливаются из `requirements.txt`.
 
-### 🛠️ Технологии
+Для личного использования рекомендуется сделать приложение **Private** в настройках Streamlit Community Cloud и разрешить просмотр только своему аккаунту.
+
+## 🛠️ Технологии
 
 - Python
 - Streamlit
@@ -120,7 +105,7 @@ GitHub Actions автоматически проверяет проект пос
 - pytest
 - GitHub Actions
 
-### 📄 Поддерживаемые форматы
+## 📄 Поддерживаемые форматы
 
 **Image Crop Tool:** PNG, JPG, JPEG, WEBP, BMP, TIFF, GIF и AVIF.
 
@@ -128,128 +113,43 @@ GitHub Actions автоматически проверяет проект пос
 
 ---
 
-## 🇬🇧 English version
+## 🇬🇧 English
 
-### ✨ Features
+### ✂️ Image Crop Tool
 
-The application contains **two tabs**:
+- Batch image upload
+- **Clear uploaded images** button
+- Automatic empty-area cropping
+- Manual cropping
+- No-crop mode
+- Adjustable square canvas and padding
+- PNG/JPG export
+- Transparent PNG background
+- ZIP download for multiple results
+- Light/dark theme
+- AVIF support when the plugin is installed
 
-#### ✂️ Image Crop Tool
+### 📦 ZIP Cleaner
 
-- 📁 Upload multiple images at once
-- ✂️ Automatic empty-area cropping
-- 🎯 Manual cropping from four sides
-- ⬜ No-crop mode
-- 📐 Adjustable square canvas
-- ↔️ Adjustable padding
-- 🖼️ Export to PNG or JPG
-- 🔲 Transparent PNG background
-- 📦 Download multiple results as a single ZIP archive
-- 🌓 Light and dark themes
-- 🧩 AVIF support when `pillow-avif-plugin` is installed
+- Keeps `_images_1`
+- Removes other `_images_2`, `_images_3`, etc.
+- Converts the primary image to PNG
+- Renames it to `{folder_name}_1.png`
+- Maximum 30 files per input ZIP
+- Maximum 100 MB input ZIP
+- Unique output ZIP names
 
-#### 📦 ZIP Cleaner
+### 🛡️ Security limits
 
-A fast tool for cleaning ZIP archives containing image variants.
-
-Only files containing **`_images_`** in their filename are processed.
-
-- ✅ Keeps only the main `_images_1` file
-- 🗑️ Removes other `_images_2`, `_images_3`, etc.
-- 🔄 Renames the primary image to `{folder_name}_1.png`
-- 🖼️ Converts the primary image to PNG
-- 📦 Packs all processed PNG files into one ZIP archive
-- 📂 Does not create multiple output folders
-- 🚫 Files without `_images_` are ignored
-
-Example:
-
-```text
-product/
-├── product_images_1.jpg   → product_1.png
-├── product_images_2.jpg   → removed
-├── product_images_3.webp  → removed
-└── other_file.txt         → ignored
-```
-
-### 🛡️ Stale-result protection — v2.1
-
-The application now prevents accidental downloads of results from a **previous upload**.
-
-Each new upload gets a **SHA-256 content fingerprint**, combined with its filename and size.
-
-When the uploaded input changes:
-
-1. The previous result is automatically removed from `session_state`.
-2. The old download button disappears.
-3. A new download becomes available only after processing the new input.
-
-The protection covers **both tabs**:
-
-- ✂️ Image Crop Tool — previous processed images are cleared when the uploaded set changes.
-- 📦 ZIP Cleaner — the previous cleaned ZIP is cleared when the source archive changes.
-
-This prevents downloading an old result after uploading a new file.
-
-### 🔄 ZIP Cleaner workflow
-
-1. Upload a ZIP archive.
-2. Find image files containing `_images_`.
-3. Detect `_images_1` as the primary image.
-4. Convert the primary image to PNG.
-5. Rename it to `{folder_name}_1.png`.
-6. Remove all other `_images_` variants.
-7. Pack the resulting PNG files into one ZIP archive.
-8. Make the new result available for download.
-9. Automatically clear the previous result when another ZIP is uploaded.
-
-> **Note:** `rembg` is no longer used or required.
-
-### 🚀 Local installation
-
-```bash
-git clone https://github.com/justsmokeadfly/image-crop-tool.git
-cd image-crop-tool
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-### 🧪 Tests
-
-```bash
-pip install -r requirements-dev.txt
-pytest -q
-```
-
-GitHub Actions automatically validates the project after changes.
-
-### ☁️ Streamlit Community Cloud
-
-The project is ready for **Streamlit Community Cloud**.
-
-- **Repository:** `justsmokeadfly/image-crop-tool`
-- **Branch:** `main`
-- **Main file:** `app.py`
-
-Dependencies are installed automatically from `requirements.txt`.
-
-### 🛠️ Technologies
-
-- Python
-- Streamlit
-- Pillow
-- pillow-avif-plugin
-- pytest
-- GitHub Actions
-
-### 📄 Supported formats
-
-**Image Crop Tool:** PNG, JPG, JPEG, WEBP, BMP, TIFF, GIF and AVIF.
-
-**ZIP Cleaner:** image formats with automatic conversion of the primary `_images_1` image to PNG.
-
----
+- Maximum 30 uploaded images
+- Maximum 50 MB per image
+- Maximum 100 MB total image upload
+- Maximum 5000×5000 pixels
+- Maximum 30 files per ZIP
+- Maximum 100 MB ZIP
+- SHA-256 input fingerprints
+- Previous results are cleared when inputs change
 
 ## 🔗 Repository
 
-urlGitHub — justsmokeadfly/image-crop-toolhttps://github.com/justsmokeadfly/image-crop-tool
+GitHub: https://github.com/justsmokeadfly/image-crop-tool
