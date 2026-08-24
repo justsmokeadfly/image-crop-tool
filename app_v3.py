@@ -1,5 +1,4 @@
 import hashlib
-import html
 import io
 import zipfile
 from pathlib import Path
