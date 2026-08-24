@@ -1,9 +1,4 @@
-"""ZIP cleaner used by the Streamlit ZIP tab.
-
-The cleaner keeps the first *_images_1 image from each folder, converts it
-into PNG, flattens all results into one output ZIP, and removes other
-*_images_* variants. No background-removal library is used.
-"""
+"""Safe ZIP cleaner used by the Streamlit ZIP tab."""
 
 from __future__ import annotations
 
@@ -18,6 +13,9 @@ from PIL import Image
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".avif", ".gif"}
+MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
+MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
+MAX_ARCHIVE_FILES = 10_000
 
 
 def _is_candidate(file_name: str) -> bool:
@@ -27,6 +25,41 @@ def _is_candidate(file_name: str) -> bool:
 def _is_first_image(file_name: str) -> bool:
     path = Path(file_name)
     return path.suffix.lower() in IMAGE_EXTENSIONS and path.stem.endswith("_images_1")
+
+
+def _safe_member_path(temp_dir: str, member_name: str) -> str:
+    """Return a safe extraction path or raise ValueError for unsafe ZIP names."""
+    normalized = member_name.replace("\\", "/")
+    path = Path(normalized)
+    if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
+        raise ValueError(f"Небезопасный путь в ZIP: {member_name!r}")
+    destination = Path(temp_dir, *path.parts).resolve()
+    root = Path(temp_dir).resolve()
+    if destination != root and root not in destination.parents:
+        raise ValueError(f"Небезопасный путь в ZIP: {member_name!r}")
+    return str(destination)
+
+
+def _extract_safely(source_zip: zipfile.ZipFile, temp_dir: str) -> None:
+    infos = source_zip.infolist()
+    if len(infos) > MAX_ARCHIVE_FILES:
+        raise ValueError(f"В ZIP слишком много файлов: максимум {MAX_ARCHIVE_FILES}")
+
+    total_uncompressed = 0
+    for info in infos:
+        if info.is_dir():
+            continue
+        total_uncompressed += info.file_size
+        if total_uncompressed > MAX_UNCOMPRESSED_BYTES:
+            raise ValueError(f"Распакованный ZIP слишком большой: максимум {MAX_UNCOMPRESSED_BYTES // (1024 * 1024)} МБ")
+        destination = _safe_member_path(temp_dir, info.filename)
+        Path(destination).parent.mkdir(parents=True, exist_ok=True)
+        with source_zip.open(info, "r") as src, open(destination, "wb") as dst:
+            while True:
+                chunk = src.read(1024 * 1024)
+                if not chunk:
+                    break
+                dst.write(chunk)
 
 
 def _convert_to_png(source_path: str, target_path: str) -> None:
@@ -45,18 +78,13 @@ def clean_zip_bytes(
 ) -> tuple[bytes, dict[str, int]]:
     """Clean a ZIP and return a flattened ZIP containing only first images.
 
-    Rules:
-      * Only filenames containing ``_images_`` are processed.
-      * ``*_images_1.ext`` is converted to PNG and renamed to
-        ``{parent_folder}_1.png``.
-      * Other ``*_images_*`` files are deleted.
-      * Files without ``_images_`` are ignored by the cleaner and are not
-        included in the result ZIP.
-      * If the target name already exists, the source is discarded and counted
-        as skipped.
-      * The resulting ZIP contains all selected images at its root (no folders).
-      * No rembg or background-removal processing is performed.
+    Only ``*_images_1`` image files are retained, converted to PNG and renamed
+    to ``{parent_folder}_1.png``. Other ``*_images_*`` files are discarded.
+    Non-matching files are intentionally excluded from the output.
     """
+    if len(zip_bytes) > MAX_ARCHIVE_BYTES:
+        raise ValueError(f"ZIP слишком большой: максимум {MAX_ARCHIVE_BYTES // (1024 * 1024)} МБ")
+
     stats = {
         "scanned": 0,
         "candidates": 0,
@@ -71,8 +99,13 @@ def clean_zip_bytes(
     used_names: set[str] = set()
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as source_zip:
-            source_zip.extractall(temp_dir)
+        try:
+            with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as source_zip:
+                if source_zip.testzip() is not None:
+                    raise ValueError("ZIP содержит повреждённый файл")
+                _extract_safely(source_zip, temp_dir)
+        except zipfile.BadZipFile as exc:
+            raise ValueError("Файл не является корректным ZIP-архивом") from exc
 
         for root, _, files in os.walk(temp_dir):
             for file_name in files:
