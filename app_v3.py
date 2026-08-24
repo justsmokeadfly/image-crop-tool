@@ -1,6 +1,8 @@
 import hashlib
 import io
+import secrets
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
@@ -56,6 +58,12 @@ st.markdown('<div class="hero"><h1>🖼️ Обработчик изображе
 
 def content_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def unique_archive_name(prefix: str) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    token = secrets.token_hex(4)
+    return f"{prefix}_{timestamp}_{token}.zip"
 
 
 def crop_upload_signature(uploaded):
@@ -199,7 +207,7 @@ with crop_tab:
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
                 for name, data, _ in results:
                     z.writestr(name, data)
-            st.download_button("⬇️ Скачать все ZIP-архивом", buf.getvalue(), file_name="processed_images.zip", mime="application/zip", use_container_width=True)
+            st.download_button("⬇️ Скачать все ZIP-архивом", buf.getvalue(), file_name=unique_archive_name("processed_images"), mime="application/zip", use_container_width=True)
 
 with zip_tab:
     st.subheader("Очистка ZIP-архивов")
@@ -218,7 +226,7 @@ with zip_tab:
                     lambda done, count: progress.progress(done / max(1, count), text=f"Упаковано {done}/{count}"),
                 )
                 st.session_state.cleaned_zip = result
-                st.session_state.cleaned_zip_name = f"{Path(zip_file.name).stem}_cleaned.zip"
+                st.session_state.cleaned_zip_name = unique_archive_name("cleaned_images")
                 st.session_state.cleaned_zip_stats = stats
                 st.success(
                     f"Готово. Конвертировано в PNG: {stats.get('converted', 0)}; "
