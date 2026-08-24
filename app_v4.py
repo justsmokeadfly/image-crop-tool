@@ -109,7 +109,11 @@ def process_image(data, name, size, margin, mode, fmt, manual, transparent):
         raise ValueError("изображение больше допустимого размера 5000 × 5000 px")
     img.load()
     ext = Path(name).suffix.lower()
-    effective = fmt if fmt != "AUTO" else ("PNG" if ext in {".png", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".avif"} else "JPG")
+    # AUTO now respects transparency: if transparent output is requested, PNG is forced.
+    if transparent:
+        effective = "PNG"
+    else:
+        effective = fmt if fmt != "AUTO" else ("PNG" if ext in {".png", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".avif"} else "JPG")
     if mode == "auto":
         bbox = trim_background(img)
     elif mode == "manual":
@@ -147,6 +151,8 @@ with crop_tab:
         margin = c2.number_input("Отступ вокруг объекта (px)", min_value=0, max_value=max(0, size // 2 - 1), value=min(10, size // 2 - 1))
         fmt = c3.radio("Формат", ["AUTO", "PNG", "JPG"], horizontal=True)
         transparent = st.checkbox("Прозрачный фон", value=False) if fmt in ("AUTO", "PNG") else False
+        if transparent and fmt == "AUTO":
+            st.caption("AUTO + прозрачный фон → автоматически PNG")
         mode = st.radio("Режим обрезки", ["auto", "manual", "none"], format_func=lambda x: {"auto": "Авто — убрать пустой фон", "manual": "Вручную", "none": "Без обрезки"}[x], horizontal=True)
         manual = (0, 0, 0, 0)
         if mode == "manual":
