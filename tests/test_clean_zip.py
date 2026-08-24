@@ -1,7 +1,16 @@
 import io
 import zipfile
 
-from clean_zip import clean_zip_bytes
+import pytest
+from PIL import Image
+
+from clean_zip import MAX_ARCHIVE_BYTES, MAX_UNCOMPRESSED_BYTES, clean_zip_bytes
+
+
+def make_image(fmt="PNG"):
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 2), "red").save(buf, format=fmt)
+    return buf.getvalue()
 
 
 def make_zip(files):
@@ -17,80 +26,92 @@ def read_zip(data):
         return {name: archive.read(name) for name in archive.namelist()}
 
 
-def test_first_image_is_renamed_and_other_images_are_deleted():
+def test_first_image_is_converted_to_png_and_other_images_are_deleted():
     source = make_zip(
         {
-            "product/folder_images_1.jpg": b"first",
-            "product/folder_images_2.png": b"second",
-            "product/folder_images_3.webp": b"third",
-            "product/description.txt": b"keep",
+            "product/folder_images_1.jpg": make_image("JPEG"),
+            "product/folder_images_2.png": make_image("PNG"),
+            "product/folder_images_3.webp": make_image("WEBP"),
+            "product/description.txt": b"ignore",
         }
     )
 
     result, stats = clean_zip_bytes(source)
     files = read_zip(result)
 
-    assert "product/folder_1.jpg" in files
-    assert files["product/folder_1.jpg"] == b"first"
-    assert "product/folder_images_1.jpg" not in files
-    assert "product/folder_images_2.png" not in files
-    assert "product/folder_images_3.webp" not in files
-    assert files["product/description.txt"] == b"keep"
+    assert list(files) == ["product_1.png"]
+    assert Image.open(io.BytesIO(files["product_1.png"])).format == "PNG"
     assert stats["renamed"] == 1
+    assert stats["converted"] == 1
     assert stats["deleted"] == 2
 
 
-def test_non_matching_files_are_untouched():
-    source = make_zip(
-        {
-            "folder/photo.jpg": b"photo",
-            "folder/photo_1.png": b"other",
-            "folder/readme.txt": b"text",
-        }
-    )
+def test_non_matching_files_are_excluded_from_result():
+    source = make_zip({"folder/photo.jpg": b"photo", "folder/readme.txt": b"text"})
 
     result, stats = clean_zip_bytes(source)
-    files = read_zip(result)
 
-    assert files == {
-        "folder/photo.jpg": b"photo",
-        "folder/photo_1.png": b"other",
-        "folder/readme.txt": b"text",
-    }
+    assert read_zip(result) == {}
     assert stats["candidates"] == 0
     assert stats["renamed"] == 0
     assert stats["deleted"] == 0
 
 
-def test_existing_target_deletes_source_and_skips_rename():
+def test_duplicate_output_names_from_different_folders_are_skipped():
     source = make_zip(
         {
-            "folder/folder_1.png": b"existing",
-            "folder/folder_images_1.png": b"source",
-            "folder/folder_images_2.png": b"extra",
+            "same/shared_images_1.png": make_image(),
+            "other/shared_images_1.png": make_image(),
         }
     )
 
     result, stats = clean_zip_bytes(source)
     files = read_zip(result)
 
-    assert files["folder/folder_1.png"] == b"existing"
-    assert "folder/folder_images_1.png" not in files
-    assert "folder/folder_images_2.png" not in files
+    assert list(files) == ["same_1.png", "other_1.png"]
+    assert stats["skipped_existing"] == 0
+
+
+def test_existing_target_inside_folder_is_skipped():
+    source = make_zip(
+        {
+            "folder/folder_1.png": make_image(),
+            "folder/folder_images_1.png": make_image(),
+            "folder/folder_images_2.png": make_image(),
+        }
+    )
+
+    result, stats = clean_zip_bytes(source)
+    files = read_zip(result)
+
+    assert list(files) == []
     assert stats["skipped_existing"] == 1
     assert stats["deleted"] == 1
 
 
-def test_first_image_keeps_original_extension():
-    source = make_zip(
-        {
-            "folder/item_images_1.webp": b"webp",
-            "folder/item_images_2.jpg": b"extra",
-        }
-    )
+def test_zip_path_traversal_is_rejected():
+    source = make_zip({"../evil.txt": b"bad"})
 
-    result, _ = clean_zip_bytes(source)
-    files = read_zip(result)
+    with pytest.raises(ValueError, match="Небезопасный путь"):
+        clean_zip_bytes(source)
 
-    assert "folder/item_1.webp" in files
-    assert "folder/item_1.png" not in files
+
+def test_absolute_zip_path_is_rejected():
+    source = make_zip({"/evil.txt": b"bad"})
+
+    with pytest.raises(ValueError, match="Небезопасный путь"):
+        clean_zip_bytes(source)
+
+
+def test_archive_size_limit_is_enforced():
+    with pytest.raises(ValueError, match="ZIP слишком большой"):
+        clean_zip_bytes(b"0" * (MAX_ARCHIVE_BYTES + 1))
+
+
+def test_uncompressed_size_limit_is_enforced():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as archive:
+        archive.writestr("large.bin", b"0" * (MAX_UNCOMPRESSED_BYTES + 1))
+
+    with pytest.raises(ValueError, match="Распакованный ZIP слишком большой"):
+        clean_zip_bytes(buf.getvalue())
