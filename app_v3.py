@@ -22,7 +22,7 @@ IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"] + (["avi
 MAX_IMAGE_FILES = 30
 MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024
 MAX_IMAGE_TOTAL_BYTES = 100 * 1024 * 1024
-MAX_IMAGE_PIXELS = 100_000_000
+MAX_IMAGE_PIXELS = 25_000_000  # 5000 x 5000
 MAX_ZIP_BYTES = 100 * 1024 * 1024
 
 st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", initial_sidebar_state="collapsed")
