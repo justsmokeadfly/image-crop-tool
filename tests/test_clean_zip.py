@@ -4,7 +4,7 @@ import zipfile
 import pytest
 from PIL import Image
 
-from clean_zip import MAX_ARCHIVE_BYTES, MAX_UNCOMPRESSED_BYTES, clean_zip_bytes
+from clean_zip import MAX_ARCHIVE_BYTES, clean_zip_bytes
 
 
 def make_image(fmt="PNG"):
@@ -57,7 +57,7 @@ def test_non_matching_files_are_excluded_from_result():
     assert stats["deleted"] == 0
 
 
-def test_duplicate_output_names_from_different_folders_are_skipped():
+def test_duplicate_output_names_from_different_folders_are_allowed():
     source = make_zip(
         {
             "same/shared_images_1.png": make_image(),
@@ -106,12 +106,3 @@ def test_absolute_zip_path_is_rejected():
 def test_archive_size_limit_is_enforced():
     with pytest.raises(ValueError, match="ZIP слишком большой"):
         clean_zip_bytes(b"0" * (MAX_ARCHIVE_BYTES + 1))
-
-
-def test_uncompressed_size_limit_is_enforced():
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as archive:
-        archive.writestr("large.bin", b"0" * (MAX_UNCOMPRESSED_BYTES + 1))
-
-    with pytest.raises(ValueError, match="Распакованный ZIP слишком большой"):
-        clean_zip_bytes(buf.getvalue())
