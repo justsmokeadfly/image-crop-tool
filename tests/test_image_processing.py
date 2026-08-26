@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 
-APP = Path(__file__).resolve().parents[1] / "app_v3.py"
+APP = Path(__file__).resolve().parents[1] / "app_v4.py"
 
 
 def _load_processing_functions():
@@ -13,6 +13,7 @@ def _load_processing_functions():
     wanted = {"trim_background", "crop_to_square"}
     nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in wanted]
     module = ast.Module(body=nodes, type_ignores=[])
+    module = ast.fix_missing_locations(module)
     namespace = {"Image": Image, "ImageChops": ImageChops}
     exec(compile(module, str(APP), "exec"), namespace)
     return namespace["trim_background"], namespace["crop_to_square"]
