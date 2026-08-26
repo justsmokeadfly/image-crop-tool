@@ -43,20 +43,38 @@ if st.session_state.theme == "Тёмная":
     [data-testid="stExpander"] details,
     [data-testid="stExpander"] details > summary,
     [data-testid="stExpander"] details > div { background:#161b22 !important; }
-    [data-testid="stExpander"] summary { color:#e6edf3 !important; }
+    [data-testid="stExpander"] summary,
     [data-testid="stExpander"] summary * { color:#e6edf3 !important; }
 
-    /* File uploader */
-    [data-testid="stFileUploaderDropzone"] { background:#161b22 !important; border-color:#3b4350 !important; }
-    [data-testid="stFileUploaderDropzone"] * { color:#e6edf3 !important; }
+    /* File uploader and uploaded-file rows */
+    [data-testid="stFileUploaderDropzone"],
+    [data-testid="stFileUploaderFile"],
+    [data-testid="stFileUploaderFileData"],
+    [data-testid="stFileUploaderFileData"] > div {
+        background:#161b22 !important;
+        border-color:#3b4350 !important;
+    }
+    [data-testid="stFileUploaderDropzone"] *,
+    [data-testid="stFileUploaderFile"] *,
+    [data-testid="stFileUploaderFileData"] * {
+        color:#e6edf3 !important;
+    }
+    [data-testid="stFileUploaderFile"] svg,
+    [data-testid="stFileUploaderFileData"] svg { fill:#b8c0cc !important; color:#b8c0cc !important; }
     [data-testid="stFileUploaderDropzone"] button,
     [data-testid="stFileUploaderDropzone"] [role="button"] {
         background:#21262d !important;
-        color:#e6edf3 !important;
+        color:#ffffff !important;
         border:1px solid #3b4350 !important;
     }
     [data-testid="stFileUploaderDropzone"] button:hover,
     [data-testid="stFileUploaderDropzone"] [role="button"]:hover { background:#30363d !important; }
+    [data-testid="stFileUploaderFile"] button,
+    [data-testid="stFileUploaderFile"] [role="button"] {
+        color:#e6edf3 !important;
+        background:transparent !important;
+        border-color:#3b4350 !important;
+    }
 
     /* Inputs / BaseWeb controls */
     input, textarea, [data-baseweb="select"] > div,
@@ -69,7 +87,7 @@ if st.session_state.theme == "Тёмная":
     [data-testid="stTabs"] button { color:#c9d1d9 !important; }
     [data-testid="stTabs"] button[aria-selected="true"] { color:#ffffff !important; }
     [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
-    [data-testid="stMarkdownContainer"] span, label { color:#e6edf3; }
+    [data-testid="stMarkdownContainer"] span, label { color:#e6edf3 !important; }
     </style>
     """, unsafe_allow_html=True)
 else:
@@ -261,19 +279,14 @@ with zip_tab:
         if zip_file.size > MAX_ZIP_BYTES:
             st.error("ZIP слишком большой. Максимум 100 МБ.")
         elif st.button("🧹 Очистить ZIP", type="primary", use_container_width=True):
-            progress = st.progress(0, text="Подготовка…")
             try:
-                result, stats = clean_zip_bytes(zip_file.getvalue(), lambda done, count: progress.progress(done / max(1, count), text=f"Упаковано {done}/{count}"))
-                st.session_state.cleaned_zip = result
+                cleaned, stats = clean_zip_bytes(zip_file.getvalue(), zip_file.name)
+                st.session_state.cleaned_zip = cleaned
                 st.session_state.cleaned_zip_name = unique_archive_name("cleaned_images")
                 st.session_state.cleaned_zip_stats = stats
-                st.success(f"Готово. Конвертировано: {stats.get('converted', 0)} · переименовано: {stats.get('renamed', 0)} · удалено: {stats.get('deleted', 0)}.")
             except Exception as exc:
-                st.error(f"Не удалось обработать ZIP: {exc}")
-            finally:
-                progress.empty()
+                st.error(f"Ошибка обработки ZIP: {exc}")
     if st.session_state.get("cleaned_zip"):
+        stats = st.session_state.get("cleaned_zip_stats", {})
+        st.success(f"Готово. Удалено файлов: {stats.get('removed', 0)}")
         st.download_button("⬇️ Скачать очищенный ZIP", st.session_state.cleaned_zip, file_name=st.session_state.cleaned_zip_name, mime="application/zip", use_container_width=True)
-
-st.divider()
-st.caption(f"{APP_NAME} · Streamlit")
