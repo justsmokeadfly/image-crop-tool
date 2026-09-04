@@ -37,8 +37,8 @@
 - 🖼️ Конвертирует основной файл в PNG
 - 📦 Собирает результат в один ZIP
 - 🚫 Файлы без `_images_` не затрагиваются
-- 🔢 Максимум **30 файлов** в исходном ZIP
-- 💾 Максимум **100 МБ** на исходный ZIP
+- 🔢 Максимум **200 файлов** в исходном ZIP
+- 💾 Максимум **300 МБ** на исходный ZIP
 
 ## 🛡️ Ограничения и защита
 
@@ -53,8 +53,9 @@
 
 ### ZIP Cleaner
 
-- максимум **100 МБ** исходного ZIP;
-- максимум **30 файлов** в архиве;
+- максимум **300 МБ** исходного ZIP;
+- максимум **200 файлов** в архиве;
+- максимум **1500 МБ** распакованного содержимого ZIP;
 - защита от небезопасных путей при обработке ZIP;
 - результат предыдущего архива автоматически сбрасывается при загрузке нового;
 - скачиваемый ZIP получает уникальное имя.
@@ -139,8 +140,8 @@ streamlit run app.py
 - Removes other `_images_2`, `_images_3`, etc.
 - Converts the primary image to PNG
 - Renames it to `{folder_name}_1.png`
-- Maximum 30 files per input ZIP
-- Maximum 100 MB input ZIP
+- Maximum 200 files per input ZIP
+- Maximum 300 MB input ZIP
 - Unique output ZIP names
 
 ### 🛡️ Security limits
@@ -149,8 +150,9 @@ streamlit run app.py
 - Maximum 50 MB per image
 - Maximum 100 MB total image upload
 - Maximum 5000×5000 pixels
-- Maximum 30 files per ZIP
-- Maximum 100 MB ZIP
+- Maximum 200 files per ZIP
+- Maximum 300 MB ZIP
+- Maximum 1500 MB uncompressed ZIP content
 - SHA-256 input fingerprints
 - Previous results are cleared when inputs change
 

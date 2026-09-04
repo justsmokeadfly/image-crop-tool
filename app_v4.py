@@ -23,7 +23,7 @@ MAX_IMAGE_FILES = 30
 MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024
 MAX_IMAGE_TOTAL_BYTES = 100 * 1024 * 1024
 MAX_IMAGE_PIXELS = 25_000_000
-MAX_ZIP_BYTES = 100 * 1024 * 1024
+MAX_ZIP_BYTES = 300 * 1024 * 1024
 
 st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", initial_sidebar_state="collapsed")
 
@@ -271,13 +271,13 @@ with crop_tab:
 
 with zip_tab:
     st.subheader("Очистка ZIP-архивов")
-    st.caption("Максимум 30 файлов и 100 МБ на исходный архив.")
+    st.caption("Максимум 200 файлов и 300 МБ на исходный архив.")
     zip_file = st.file_uploader("Загрузите исходный ZIP-архив", type=["zip"], key="clean_zip_upload")
     reset_zip_state(zip_file)
     if zip_file:
         st.info(f"Архив: **{zip_file.name}** · {zip_file.size / 1024 / 1024:.2f} МБ")
         if zip_file.size > MAX_ZIP_BYTES:
-            st.error("ZIP слишком большой. Максимум 100 МБ.")
+            st.error("ZIP слишком большой. Максимум 300 МБ.")
         elif st.button("🧹 Очистить ZIP", type="primary", use_container_width=True):
             try:
                 cleaned, stats = clean_zip_bytes(zip_file.getvalue(), zip_file.name)
