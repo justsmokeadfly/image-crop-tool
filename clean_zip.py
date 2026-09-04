@@ -81,6 +81,7 @@ def clean_zip_bytes(
     Only ``*_images_1`` image files are retained, converted to PNG and renamed
     to ``{parent_folder}_1.png``. Other ``*_images_*`` files are discarded.
     Non-matching files are intentionally excluded from the output.
+    Output order follows the order of matching entries in the source ZIP.
     """
     if len(zip_bytes) > MAX_ARCHIVE_BYTES:
         raise ValueError(f"ZIP слишком большой: максимум {MAX_ARCHIVE_BYTES // (1024 * 1024)} МБ")
@@ -103,48 +104,51 @@ def clean_zip_bytes(
             with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as source_zip:
                 if source_zip.testzip() is not None:
                     raise ValueError("ZIP содержит повреждённый файл")
+                infos = source_zip.infolist()
                 _extract_safely(source_zip, temp_dir)
         except zipfile.BadZipFile as exc:
             raise ValueError("Файл не является корректным ZIP-архивом") from exc
 
-        for root, _, files in os.walk(temp_dir):
-            for file_name in files:
-                stats["scanned"] += 1
-                if not _is_candidate(file_name):
-                    continue
+        for info in infos:
+            if info.is_dir():
+                continue
+            file_name = Path(info.filename).name
+            stats["scanned"] += 1
+            if not _is_candidate(file_name):
+                continue
 
-                stats["candidates"] += 1
-                source_path = os.path.join(root, file_name)
+            stats["candidates"] += 1
+            source_path = _safe_member_path(temp_dir, info.filename)
 
-                if not _is_first_image(file_name):
-                    os.remove(source_path)
-                    stats["deleted"] += 1
-                    continue
-
-                folder_name = os.path.basename(root)
-                if not folder_name:
-                    os.remove(source_path)
-                    stats["deleted"] += 1
-                    continue
-
-                output_name = f"{folder_name}_1.png"
-                if output_name.casefold() in used_names:
-                    os.remove(source_path)
-                    stats["skipped_existing"] += 1
-                    continue
-
-                target_path = os.path.join(root, output_name)
-                if os.path.exists(target_path):
-                    os.remove(source_path)
-                    stats["skipped_existing"] += 1
-                    continue
-
-                _convert_to_png(source_path, target_path)
+            if not _is_first_image(file_name):
                 os.remove(source_path)
-                used_names.add(output_name.casefold())
-                selected.append((target_path, output_name))
-                stats["renamed"] += 1
-                stats["converted"] += 1
+                stats["deleted"] += 1
+                continue
+
+            folder_name = Path(info.filename).parent.name
+            if not folder_name:
+                os.remove(source_path)
+                stats["deleted"] += 1
+                continue
+
+            output_name = f"{folder_name}_1.png"
+            if output_name.casefold() in used_names:
+                os.remove(source_path)
+                stats["skipped_existing"] += 1
+                continue
+
+            target_path = os.path.join(os.path.dirname(source_path), output_name)
+            if os.path.exists(target_path):
+                os.remove(source_path)
+                stats["skipped_existing"] += 1
+                continue
+
+            _convert_to_png(source_path, target_path)
+            os.remove(source_path)
+            used_names.add(output_name.casefold())
+            selected.append((target_path, output_name))
+            stats["renamed"] += 1
+            stats["converted"] += 1
 
         total = len(selected)
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as result_zip:
