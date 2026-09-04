@@ -16,13 +16,14 @@ except ImportError:
 
 from clean_zip import clean_zip_bytes
 
-APP_VERSION = "2.6"
+APP_VERSION = "2.7"
 APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"] + (["avif"] if AVIF_SUPPORTED else [])
 MAX_IMAGE_FILES = 30
 MAX_IMAGE_FILE_BYTES = 50 * 1024 * 1024
 MAX_IMAGE_TOTAL_BYTES = 100 * 1024 * 1024
-MAX_IMAGE_PIXELS = 25_000_000
+MAX_IMAGE_PIXELS = 100_000_000
+MAX_IMAGE_DIMENSION = 10_000
 MAX_ZIP_BYTES = 300 * 1024 * 1024
 
 st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", initial_sidebar_state="collapsed")
@@ -188,8 +189,8 @@ def process_image(data, name, size, margin, mode, fmt, manual, transparent):
         raise ValueError("файл больше 50 МБ")
     Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
     img = Image.open(io.BytesIO(data))
-    if img.width > 5000 or img.height > 5000 or img.width * img.height > MAX_IMAGE_PIXELS:
-        raise ValueError("изображение больше допустимого размера 5000 × 5000 px")
+    if img.width > MAX_IMAGE_DIMENSION or img.height > MAX_IMAGE_DIMENSION or img.width * img.height > MAX_IMAGE_PIXELS:
+        raise ValueError(f"изображение больше допустимого размера {MAX_IMAGE_DIMENSION} × {MAX_IMAGE_DIMENSION} px или 100 Мп")
     img.load()
     ext = Path(name).suffix.lower()
     if transparent:
@@ -229,8 +230,8 @@ def resize_image(data, name, size):
         raise ValueError("файл больше 50 МБ")
     Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
     img = Image.open(io.BytesIO(data))
-    if img.width > 5000 or img.height > 5000 or img.width * img.height > MAX_IMAGE_PIXELS:
-        raise ValueError("изображение больше допустимого размера 5000 × 5000 px")
+    if img.width > MAX_IMAGE_DIMENSION or img.height > MAX_IMAGE_DIMENSION or img.width * img.height > MAX_IMAGE_PIXELS:
+        raise ValueError(f"изображение больше допустимого размера {MAX_IMAGE_DIMENSION} × {MAX_IMAGE_DIMENSION} px или 100 Мп")
     img.load()
 
     ext = Path(name).suffix.lower()
@@ -328,8 +329,8 @@ with crop_tab:
 
 with resize_tab:
     st.subheader("Изменение размера 1:1")
-    st.caption("Прямое масштабирование изображения до квадратного размера без кадрирования и без добавления полей.")
-    resize_size = st.number_input("Новый размер, px", min_value=1, max_value=5000, value=1000, step=100, format="%d", key="resize_size")
+    st.caption(f"Прямое масштабирование изображения до квадратного размера без кадрирования и без добавления полей. Исходные изображения: до {MAX_IMAGE_DIMENSION} × {MAX_IMAGE_DIMENSION} px / 100 Мп.")
+    resize_size = st.number_input("Новый размер, px", min_value=1, max_value=MAX_IMAGE_DIMENSION, value=1000, step=100, format="%d", key="resize_size")
     resize_uploader_key = f"resize_upload_{st.session_state.get('resize_uploader_key', 0)}"
     resize_uploaded = st.file_uploader("Загрузите изображения", type=IMAGE_EXTENSIONS, accept_multiple_files=True, key=resize_uploader_key)
     reset_resize_state(resize_uploaded, resize_size)
