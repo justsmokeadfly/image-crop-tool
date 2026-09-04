@@ -76,11 +76,12 @@ def clean_zip_bytes(
     zip_bytes: bytes,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[bytes, dict[str, int]]:
-    """Clean a ZIP and return a flattened ZIP containing only first images.
+    """Clean a ZIP and return a flat ZIP containing only first images.
 
     Only ``*_images_1`` image files are retained, converted to PNG and renamed
     to ``{parent_folder}_1.png``. Other ``*_images_*`` files are discarded.
     Non-matching files are intentionally excluded from the output.
+    All output files are stored at the ZIP root without folders.
     Output order follows the order of matching entries in the source ZIP.
     """
     if len(zip_bytes) > MAX_ARCHIVE_BYTES:
@@ -153,7 +154,9 @@ def clean_zip_bytes(
         total = len(selected)
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as result_zip:
             for processed, (file_path, arcname) in enumerate(selected, 1):
-                result_zip.write(file_path, arcname)
+                # arcname contains only the generated filename, so the output
+                # archive is always flat: no source folders are recreated.
+                result_zip.write(file_path, arcname=arcname)
                 if progress_callback:
                     progress_callback(processed, total)
 
