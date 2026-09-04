@@ -16,7 +16,7 @@ except ImportError:
 
 from clean_zip import clean_zip_bytes
 
-APP_VERSION = "2.4"
+APP_VERSION = "2.5"
 APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"] + (["avif"] if AVIF_SUPPORTED else [])
 MAX_IMAGE_FILES = 30
@@ -103,7 +103,7 @@ st.markdown("""
 [data-testid="stFileUploaderDropzone"]{border-radius:14px;min-height:145px}
 </style>
 """, unsafe_allow_html=True)
-st.markdown(f'<div class="hero"><h1>🖼️ Обработчик изображений</h1><p>Обрезка изображений и очистка ZIP-архивов · v{APP_VERSION}</p></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="hero"><h1>🖼️ Обработчик изображений</h1><p>Обрезка изображений, изменение размера и очистка ZIP-архивов · v{APP_VERSION}</p></div>', unsafe_allow_html=True)
 
 
 def content_hash(data: bytes) -> str:
@@ -129,6 +129,20 @@ def reset_crop_state(uploaded):
         st.session_state.pop("crop_errors", None)
 
 
+def resize_signature(uploaded):
+    if not uploaded:
+        return None
+    return tuple((f.name, f.size, content_hash(f.getvalue())) for f in uploaded)
+
+
+def reset_resize_state(uploaded):
+    sig = resize_signature(uploaded)
+    if sig != st.session_state.get("resize_input_signature"):
+        st.session_state.resize_input_signature = sig
+        st.session_state.pop("resize_results", None)
+        st.session_state.pop("resize_errors", None)
+
+
 def reset_zip_state(uploaded):
     sig = None if uploaded is None else (uploaded.name, uploaded.size, content_hash(uploaded.getvalue()))
     if sig != st.session_state.get("zip_input_signature"):
@@ -143,6 +157,14 @@ def clear_crop_uploads():
     st.session_state.pop("crop_input_signature", None)
     st.session_state.pop("crop_results", None)
     st.session_state.pop("crop_errors", None)
+    st.rerun()
+
+
+def clear_resize_uploads():
+    st.session_state.resize_uploader_key = st.session_state.get("resize_uploader_key", 0) + 1
+    st.session_state.pop("resize_input_signature", None)
+    st.session_state.pop("resize_results", None)
+    st.session_state.pop("resize_errors", None)
     st.rerun()
 
 
@@ -201,7 +223,52 @@ def process_image(data, name, size, margin, mode, fmt, manual, transparent):
     return out_name, buf.getvalue(), mime
 
 
-crop_tab, zip_tab = st.tabs(["✂️ Обрезка изображений", "🧹 Очистка ZIP"])
+def resize_image(data, name, size):
+    """Resize an image directly to size × size without cropping or adding a canvas."""
+    if len(data) > MAX_IMAGE_FILE_BYTES:
+        raise ValueError("файл больше 50 МБ")
+    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+    img = Image.open(io.BytesIO(data))
+    if img.width > 5000 or img.height > 5000 or img.width * img.height > MAX_IMAGE_PIXELS:
+        raise ValueError("изображение больше допустимого размера 5000 × 5000 px")
+    img.load()
+
+    ext = Path(name).suffix.lower()
+    resized = img.resize((size, size), Image.Resampling.LANCZOS)
+    has_alpha = "A" in resized.getbands() or "transparency" in resized.info
+
+    if ext in {".jpg", ".jpeg"}:
+        output_format = "JPEG"
+        mime = "image/jpeg"
+        resized = resized.convert("RGB")
+    elif ext == ".webp":
+        output_format = "WEBP"
+        mime = "image/webp"
+        resized = resized.convert("RGBA" if has_alpha else "RGB")
+    elif ext == ".bmp":
+        output_format = "BMP"
+        mime = "image/bmp"
+        resized = resized.convert("RGBA" if has_alpha else "RGB")
+    elif ext in {".tif", ".tiff"}:
+        output_format = "TIFF"
+        mime = "image/tiff"
+        resized = resized.convert("RGBA" if has_alpha else "RGB")
+    elif ext == ".gif":
+        output_format = "GIF"
+        mime = "image/gif"
+        resized = resized.convert("RGBA" if has_alpha else "RGB")
+    else:
+        output_format = "PNG"
+        mime = "image/png"
+        resized = resized.convert("RGBA" if has_alpha else "RGB")
+
+    buf = io.BytesIO()
+    save_kwargs = {"quality": 95} if output_format == "JPEG" else {}
+    resized.save(buf, format=output_format, **save_kwargs)
+    return name, buf.getvalue(), mime
+
+
+crop_tab, resize_tab, zip_tab = st.tabs(["✂️ Обрезка изображений", "📐 Изменить размер 1:1", "🧹 Очистка ZIP"])
 
 with crop_tab:
     st.subheader("Обрезка и подготовка изображений")
@@ -258,6 +325,50 @@ with crop_tab:
                 for name, data, _ in results:
                     z.writestr(name, data)
             st.download_button("⬇️ Скачать все ZIP-архивом", archive.getvalue(), file_name=unique_archive_name("processed_images"), mime="application/zip", use_container_width=True)
+
+with resize_tab:
+    st.subheader("Изменение размера 1:1")
+    st.caption("Прямое масштабирование квадратных изображений без кадрирования и без добавления белых или прозрачных полей.")
+    resize_size = st.number_input("Новый размер", min_value=1, max_value=5000, value=1000, step=100, format="%d px")
+    resize_uploader_key = f"resize_upload_{st.session_state.get('resize_uploader_key', 0)}"
+    resize_uploaded = st.file_uploader("Загрузите квадратные изображения", type=IMAGE_EXTENSIONS, accept_multiple_files=True, key=resize_uploader_key)
+    reset_resize_state(resize_uploaded)
+    if resize_uploaded:
+        total = sum(f.size for f in resize_uploaded)
+        st.caption(f"Загружено: {len(resize_uploaded)} / {MAX_IMAGE_FILES} файлов · {total / 1024 / 1024:.1f} / 100 МБ")
+        if st.button("🗑️ Очистить загруженные изображения", key="clear_resize_uploads", use_container_width=True):
+            clear_resize_uploads()
+        if len(resize_uploaded) > MAX_IMAGE_FILES:
+            st.error(f"Слишком много файлов. Максимум: {MAX_IMAGE_FILES}.")
+        if total > MAX_IMAGE_TOTAL_BYTES:
+            st.error("Общий размер файлов превышает 100 МБ.")
+    if resize_uploaded and len(resize_uploaded) <= MAX_IMAGE_FILES and sum(f.size for f in resize_uploaded) <= MAX_IMAGE_TOTAL_BYTES:
+        if st.button("▶ Изменить размер", key="resize_images_button", type="primary", use_container_width=True):
+            results, errors = [], []
+            progress = st.progress(0, text="Подготовка…")
+            for i, file in enumerate(resize_uploaded, 1):
+                try:
+                    results.append(resize_image(file.getvalue(), file.name, int(resize_size)))
+                except Exception as exc:
+                    errors.append(f"{file.name}: {exc}")
+                progress.progress(i / len(resize_uploaded), text=f"Обработано {i}/{len(resize_uploaded)}")
+            progress.empty()
+            st.session_state.resize_results = results
+            st.session_state.resize_errors = errors
+            if errors:
+                st.error("\n".join(errors))
+
+    resize_results = st.session_state.get("resize_results", [])
+    if resize_results:
+        st.success(f"Готово: {len(resize_results)} изображений · {int(resize_size)} × {int(resize_size)} px")
+        if len(resize_results) == 1:
+            st.download_button("⬇️ Скачать результат", resize_results[0][1], file_name=resize_results[0][0], mime=resize_results[0][2], key="download_resize_single", use_container_width=True)
+        else:
+            archive = io.BytesIO()
+            with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+                for name, data, _ in resize_results:
+                    z.writestr(name, data)
+            st.download_button("⬇️ Скачать все ZIP-архивом", archive.getvalue(), file_name=unique_archive_name("resized_images"), mime="application/zip", key="download_resize_zip", use_container_width=True)
 
 with zip_tab:
     st.subheader("Очистка ZIP-архивов")
