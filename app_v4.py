@@ -16,7 +16,7 @@ except ImportError:
 
 from clean_zip import clean_zip_bytes
 
-APP_VERSION = "2.5"
+APP_VERSION = "2.6"
 APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"] + (["avif"] if AVIF_SUPPORTED else [])
 MAX_IMAGE_FILES = 30
@@ -129,14 +129,14 @@ def reset_crop_state(uploaded):
         st.session_state.pop("crop_errors", None)
 
 
-def resize_signature(uploaded):
+def resize_signature(uploaded, size):
     if not uploaded:
         return None
-    return tuple((f.name, f.size, content_hash(f.getvalue())) for f in uploaded)
+    return (int(size), tuple((f.name, f.size, content_hash(f.getvalue())) for f in uploaded))
 
 
-def reset_resize_state(uploaded):
-    sig = resize_signature(uploaded)
+def reset_resize_state(uploaded, size):
+    sig = resize_signature(uploaded, size)
     if sig != st.session_state.get("resize_input_signature"):
         st.session_state.resize_input_signature = sig
         st.session_state.pop("resize_results", None)
@@ -292,14 +292,14 @@ with crop_tab:
     if uploaded:
         total = sum(f.size for f in uploaded)
         st.caption(f"Загружено: {len(uploaded)} / {MAX_IMAGE_FILES} файлов · {total / 1024 / 1024:.1f} / 100 МБ")
-        if st.button("🗑️ Очистить загруженные изображения", use_container_width=True):
+        if st.button("🗑️ Очистить загруженные изображения", key="clear_crop_uploads", use_container_width=True):
             clear_crop_uploads()
         if len(uploaded) > MAX_IMAGE_FILES:
             st.error(f"Слишком много файлов. Максимум: {MAX_IMAGE_FILES}.")
         if total > MAX_IMAGE_TOTAL_BYTES:
             st.error("Общий размер файлов превышает 100 МБ.")
     if uploaded and len(uploaded) <= MAX_IMAGE_FILES and sum(f.size for f in uploaded) <= MAX_IMAGE_TOTAL_BYTES:
-        if st.button("▶ Обработать изображения", type="primary", use_container_width=True):
+        if st.button("▶ Обработать изображения", key="process_crop_images", type="primary", use_container_width=True):
             results, errors = [], []
             progress = st.progress(0, text="Подготовка…")
             for i, file in enumerate(uploaded, 1):
@@ -328,11 +328,11 @@ with crop_tab:
 
 with resize_tab:
     st.subheader("Изменение размера 1:1")
-    st.caption("Прямое масштабирование квадратных изображений без кадрирования и без добавления белых или прозрачных полей.")
-    resize_size = st.number_input("Новый размер", min_value=1, max_value=5000, value=1000, step=100, format="%d px")
+    st.caption("Прямое масштабирование изображения до квадратного размера без кадрирования и без добавления полей.")
+    resize_size = st.number_input("Новый размер, px", min_value=1, max_value=5000, value=1000, step=100, format="%d", key="resize_size")
     resize_uploader_key = f"resize_upload_{st.session_state.get('resize_uploader_key', 0)}"
-    resize_uploaded = st.file_uploader("Загрузите квадратные изображения", type=IMAGE_EXTENSIONS, accept_multiple_files=True, key=resize_uploader_key)
-    reset_resize_state(resize_uploaded)
+    resize_uploaded = st.file_uploader("Загрузите изображения", type=IMAGE_EXTENSIONS, accept_multiple_files=True, key=resize_uploader_key)
+    reset_resize_state(resize_uploaded, resize_size)
     if resize_uploaded:
         total = sum(f.size for f in resize_uploaded)
         st.caption(f"Загружено: {len(resize_uploaded)} / {MAX_IMAGE_FILES} файлов · {total / 1024 / 1024:.1f} / 100 МБ")
@@ -379,7 +379,7 @@ with zip_tab:
         st.info(f"Архив: **{zip_file.name}** · {zip_file.size / 1024 / 1024:.2f} МБ")
         if zip_file.size > MAX_ZIP_BYTES:
             st.error("ZIP слишком большой. Максимум 300 МБ.")
-        elif st.button("🧹 Очистить ZIP", type="primary", use_container_width=True):
+        elif st.button("🧹 Очистить ZIP", key="clean_zip_button", type="primary", use_container_width=True):
             try:
                 cleaned, stats = clean_zip_bytes(zip_file.getvalue())
                 st.session_state.cleaned_zip = cleaned
