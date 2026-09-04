@@ -40,15 +40,19 @@ def _safe_member_path(temp_dir: str, member_name: str) -> str:
     return str(destination)
 
 
-def _extract_safely(source_zip: zipfile.ZipFile, temp_dir: str) -> None:
+def _extract_safely(
+    source_zip: zipfile.ZipFile,
+    temp_dir: str,
+    progress_callback: Callable[[int, int, str], None] | None = None,
+) -> None:
     infos = source_zip.infolist()
-    if len(infos) > MAX_ARCHIVE_FILES:
+    file_infos = [info for info in infos if not info.is_dir()]
+    if len(file_infos) > MAX_ARCHIVE_FILES:
         raise ValueError(f"В ZIP слишком много файлов: максимум {MAX_ARCHIVE_FILES}")
 
     total_uncompressed = 0
-    for info in infos:
-        if info.is_dir():
-            continue
+    total = len(file_infos)
+    for processed, info in enumerate(file_infos, 1):
         total_uncompressed += info.file_size
         if total_uncompressed > MAX_UNCOMPRESSED_BYTES:
             raise ValueError(f"Распакованный ZIP слишком большой: максимум {MAX_UNCOMPRESSED_BYTES // (1024 * 1024)} МБ")
@@ -60,6 +64,8 @@ def _extract_safely(source_zip: zipfile.ZipFile, temp_dir: str) -> None:
                 if not chunk:
                     break
                 dst.write(chunk)
+        if progress_callback:
+            progress_callback(processed, total, "Распаковка")
 
 
 def _convert_to_png(source_path: str, target_path: str) -> None:
@@ -74,7 +80,7 @@ def _convert_to_png(source_path: str, target_path: str) -> None:
 
 def clean_zip_bytes(
     zip_bytes: bytes,
-    progress_callback: Callable[[int, int], None] | None = None,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> tuple[bytes, dict[str, int]]:
     """Clean a ZIP and return a flat ZIP containing only first images.
 
@@ -106,11 +112,12 @@ def clean_zip_bytes(
                 if source_zip.testzip() is not None:
                     raise ValueError("ZIP содержит повреждённый файл")
                 infos = source_zip.infolist()
-                _extract_safely(source_zip, temp_dir)
+                _extract_safely(source_zip, temp_dir, progress_callback)
         except zipfile.BadZipFile as exc:
             raise ValueError("Файл не является корректным ZIP-архивом") from exc
 
-        for info in infos:
+        total = len([info for info in infos if not info.is_dir()])
+        for processed, info in enumerate(infos, 1):
             if info.is_dir():
                 continue
             file_name = Path(info.filename).name
@@ -150,15 +157,15 @@ def clean_zip_bytes(
             selected.append((target_path, output_name))
             stats["renamed"] += 1
             stats["converted"] += 1
+            if progress_callback:
+                progress_callback(processed, total, "Обработка изображений")
 
-        total = len(selected)
+        total_selected = len(selected)
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as result_zip:
             for processed, (file_path, arcname) in enumerate(selected, 1):
-                # arcname contains only the generated filename, so the output
-                # archive is always flat: no source folders are recreated.
                 result_zip.write(file_path, arcname=arcname)
                 if progress_callback:
-                    progress_callback(processed, total)
+                    progress_callback(processed, total_selected, "Сборка ZIP")
 
     return output.getvalue(), stats
 
