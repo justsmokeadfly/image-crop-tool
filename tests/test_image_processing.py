@@ -21,7 +21,8 @@ def _load_processing_functions():
         "io": io,
         "Path": Path,
         "MAX_IMAGE_FILE_BYTES": 50 * 1024 * 1024,
-        "MAX_IMAGE_PIXELS": 25_000_000,
+        "MAX_IMAGE_PIXELS": 100_000_000,
+        "MAX_IMAGE_DIMENSION": 10_000,
     }
     exec(compile(module, str(APP), "exec"), namespace)
     return namespace["trim_background"], namespace["process_image"]
