@@ -37,16 +37,12 @@ if st.session_state.theme == "Тёмная":
     .stApp, [data-testid="stAppViewContainer"] { background:#0e1117; color:#f0f2f6; }
     .block-container, .block-container * { color:#e6edf3; }
     .hero p, [data-testid="stCaptionContainer"], .stCaption { color:#b8c0cc !important; }
-
-    /* Expander */
     [data-testid="stExpander"] { background:#161b22 !important; border:1px solid #30363d !important; }
     [data-testid="stExpander"] details,
     [data-testid="stExpander"] details > summary,
     [data-testid="stExpander"] details > div { background:#161b22 !important; }
     [data-testid="stExpander"] summary,
     [data-testid="stExpander"] summary * { color:#e6edf3 !important; }
-
-    /* File uploader and uploaded-file rows */
     [data-testid="stFileUploaderDropzone"],
     [data-testid="stFileUploaderFile"],
     [data-testid="stFileUploaderFileData"],
@@ -56,9 +52,7 @@ if st.session_state.theme == "Тёмная":
     }
     [data-testid="stFileUploaderDropzone"] *,
     [data-testid="stFileUploaderFile"] *,
-    [data-testid="stFileUploaderFileData"] * {
-        color:#e6edf3 !important;
-    }
+    [data-testid="stFileUploaderFileData"] * { color:#e6edf3 !important; }
     [data-testid="stFileUploaderFile"] svg,
     [data-testid="stFileUploaderFileData"] svg { fill:#b8c0cc !important; color:#b8c0cc !important; }
     [data-testid="stFileUploaderDropzone"] button,
@@ -75,15 +69,11 @@ if st.session_state.theme == "Тёмная":
         background:transparent !important;
         border-color:#3b4350 !important;
     }
-
-    /* Inputs / BaseWeb controls */
     input, textarea, [data-baseweb="select"] > div,
     [data-baseweb="input"] > div, [data-baseweb="base-input"] > div {
         color:#f0f2f6 !important; background:#161b22 !important; border-color:#3b4350 !important;
     }
     [data-baseweb="select"] *, [data-baseweb="input"] *, [data-baseweb="base-input"] * { color:#e6edf3 !important; }
-
-    /* Tabs and text */
     [data-testid="stTabs"] button { color:#c9d1d9 !important; }
     [data-testid="stTabs"] button[aria-selected="true"] { color:#ffffff !important; }
     [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
@@ -280,7 +270,7 @@ with zip_tab:
             st.error("ZIP слишком большой. Максимум 300 МБ.")
         elif st.button("🧹 Очистить ZIP", type="primary", use_container_width=True):
             try:
-                cleaned, stats = clean_zip_bytes(zip_file.getvalue(), zip_file.name)
+                cleaned, stats = clean_zip_bytes(zip_file.getvalue())
                 st.session_state.cleaned_zip = cleaned
                 st.session_state.cleaned_zip_name = unique_archive_name("cleaned_images")
                 st.session_state.cleaned_zip_stats = stats
@@ -288,5 +278,5 @@ with zip_tab:
                 st.error(f"Ошибка обработки ZIP: {exc}")
     if st.session_state.get("cleaned_zip"):
         stats = st.session_state.get("cleaned_zip_stats", {})
-        st.success(f"Готово. Удалено файлов: {stats.get('removed', 0)}")
+        st.success(f"Готово. Обработано изображений: {stats.get('renamed', 0)}")
         st.download_button("⬇️ Скачать очищенный ZIP", st.session_state.cleaned_zip, file_name=st.session_state.cleaned_zip_name, mime="application/zip", use_container_width=True)
