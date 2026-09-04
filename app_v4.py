@@ -271,7 +271,7 @@ with crop_tab:
 
 with zip_tab:
     st.subheader("Очистка ZIP-архивов")
-    st.caption("Максимум 200 файлов и 300 МБ на исходный архив.")
+    st.caption("Максимум 500 файлов и 300 МБ на исходный архив.")
     zip_file = st.file_uploader("Загрузите исходный ZIP-архив", type=["zip"], key="clean_zip_upload")
     reset_zip_state(zip_file)
     if zip_file:
