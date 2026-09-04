@@ -15,7 +15,7 @@ from PIL import Image
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".avif", ".gif"}
 MAX_ARCHIVE_BYTES = 300 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 1500 * 1024 * 1024
-MAX_ARCHIVE_FILES = 200
+MAX_ARCHIVE_FILES = 500
 
 
 def _is_candidate(file_name: str) -> bool:
