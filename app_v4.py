@@ -16,7 +16,7 @@ except ImportError:
 
 from clean_zip import clean_zip_bytes
 
-APP_VERSION = "2.9"
+APP_VERSION = "3.0"
 APP_NAME = f"Обработчик изображений v{APP_VERSION}"
 IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"] + (["avif"] if AVIF_SUPPORTED else [])
 MAX_IMAGE_FILES = 30
@@ -28,74 +28,6 @@ MAX_ZIP_BYTES = 300 * 1024 * 1024
 MAX_ZIP_ENTRIES = 500
 
 st.set_page_config(page_title=APP_NAME, page_icon="🖼️", layout="wide", initial_sidebar_state="collapsed")
-
-if "theme" not in st.session_state:
-    st.session_state.theme = "Светлая"
-
-if st.session_state.theme == "Тёмная":
-    st.markdown("""
-    <style>
-    :root { color-scheme: dark; }
-    .stApp, [data-testid="stAppViewContainer"] { background:#0e1117; color:#f0f2f6; }
-    .block-container, .block-container * { color:#e6edf3; }
-    .hero p, [data-testid="stCaptionContainer"], .stCaption { color:#b8c0cc !important; }
-    [data-testid="stExpander"] { background:#161b22 !important; border:1px solid #30363d !important; }
-    [data-testid="stExpander"] details,
-    [data-testid="stExpander"] details > summary,
-    [data-testid="stExpander"] details > div { background:#161b22 !important; }
-    [data-testid="stExpander"] summary,
-    [data-testid="stExpander"] summary * { color:#e6edf3 !important; }
-    [data-testid="stFileUploaderDropzone"],
-    [data-testid="stFileUploaderFile"],
-    [data-testid="stFileUploaderFileData"],
-    [data-testid="stFileUploaderFileData"] > div {
-        background:#161b22 !important;
-        border-color:#3b4350 !important;
-    }
-    [data-testid="stFileUploaderDropzone"] *,
-    [data-testid="stFileUploaderFile"] *,
-    [data-testid="stFileUploaderFileData"] * { color:#e6edf3 !important; }
-    [data-testid="stFileUploaderFile"] svg,
-    [data-testid="stFileUploaderFileData"] svg { fill:#b8c0cc !important; color:#b8c0cc !important; }
-    [data-testid="stFileUploaderDropzone"] button,
-    [data-testid="stFileUploaderDropzone"] [role="button"] {
-        background:#21262d !important;
-        color:#ffffff !important;
-        border:1px solid #3b4350 !important;
-    }
-    [data-testid="stFileUploaderDropzone"] button:hover,
-    [data-testid="stFileUploaderDropzone"] [role="button"]:hover { background:#30363d !important; }
-    [data-testid="stFileUploaderFile"] button,
-    [data-testid="stFileUploaderFile"] [role="button"] {
-        color:#e6edf3 !important;
-        background:transparent !important;
-        border-color:#3b4350 !important;
-    }
-    input, textarea, [data-baseweb="select"] > div,
-    [data-baseweb="input"] > div, [data-baseweb="base-input"] > div {
-        color:#f0f2f6 !important; background:#161b22 !important; border-color:#3b4350 !important;
-    }
-    [data-baseweb="select"] *, [data-baseweb="input"] *, [data-baseweb="base-input"] * { color:#e6edf3 !important; }
-    [data-testid="stTabs"] button { color:#c9d1d9 !important; }
-    [data-testid="stTabs"] button[aria-selected="true"] { color:#ffffff !important; }
-    [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
-    [data-testid="stMarkdownContainer"] span, label { color:#e6edf3 !important; }
-    </style>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <style>
-    :root { color-scheme: light; }
-    .stApp { background:#ffffff; color:#262730; }
-    </style>
-    """, unsafe_allow_html=True)
-
-with st.sidebar:
-    theme = st.radio("Тема", ["☀️ Светлая", "🌙 Тёмная"], horizontal=True, index=0 if st.session_state.theme == "Светлая" else 1)
-    new_theme = "Тёмная" if "Тёмная" in theme else "Светлая"
-    if new_theme != st.session_state.theme:
-        st.session_state.theme = new_theme
-        st.rerun()
 
 st.markdown("""
 <style>
@@ -318,9 +250,31 @@ def resize_image(data, name, size):
     return name, buf.getvalue(), mime
 
 
-crop_tab, resize_tab, zip_tab = st.tabs(["✂️ Обрезка изображений", "📐 Изменить размер 1:1", "🧹 Очистка ZIP"])
+def crop_signature(uploaded):
+    if not uploaded:
+        return None
+    return tuple((f.name, f.size, content_hash(f.getvalue())) for f in uploaded)
 
-with crop_tab:
+
+def reset_crop_state(uploaded):
+    sig = crop_signature(uploaded)
+    if sig != st.session_state.get("crop_input_signature"):
+        st.session_state.crop_input_signature = sig
+        st.session_state.pop("crop_results", None)
+        st.session_state.pop("crop_errors", None)
+
+
+def build_zip(results):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, data, _mime in results:
+            archive.writestr(name, data)
+    return buf.getvalue()
+
+
+tab_crop, tab_resize, tab_zip = st.tabs(["✂️ Обрезка изображений", "📐 Изменить размер 1:1", "🧹 Очистка ZIP"])
+
+with tab_crop:
     st.subheader("Обрезка и подготовка изображений")
     with st.expander("⚙️ Параметры", expanded=True):
         c1, c2, c3 = st.columns(3)
@@ -374,7 +328,7 @@ with crop_tab:
                 for name, data, _ in results: z.writestr(name, data)
             st.download_button("⬇️ Скачать все ZIP-архивом", archive.getvalue(), file_name=unique_archive_name("processed_images"), mime="application/zip", key="download_crop_zip", use_container_width=True)
 
-with resize_tab:
+with tab_resize:
     st.subheader("Изменение размера 1:1")
     st.caption(f"Прямое масштабирование до квадратного размера без кадрирования и без полей. Исходные изображения: до {MAX_IMAGE_DIMENSION} × {MAX_IMAGE_DIMENSION} px / 100 Мп.")
     resize_size = st.number_input("Новый размер, px", min_value=1, max_value=MAX_IMAGE_DIMENSION, value=1000, step=100, format="%d", key="resize_size")
@@ -412,7 +366,7 @@ with resize_tab:
                 for name, data, _ in resize_results: z.writestr(name, data)
             st.download_button("⬇️ Скачать все ZIP-архивом", archive.getvalue(), file_name=unique_archive_name("resized_images"), mime="application/zip", key="download_resize_zip", use_container_width=True)
 
-with zip_tab:
+with tab_zip:
     st.subheader("Очистка ZIP-архивов")
     st.caption("Максимум 500 файлов и 300 МБ на исходный архив.")
     zip_file = st.file_uploader("Загрузите исходный ZIP-архив", type=["zip"], key="clean_zip_upload")
