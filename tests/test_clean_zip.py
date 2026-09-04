@@ -40,6 +40,7 @@ def test_first_image_is_converted_to_png_and_other_images_are_deleted():
     files = read_zip(result)
 
     assert list(files) == ["product_1.png"]
+    assert all("/" not in name and "\\" not in name for name in files)
     assert Image.open(io.BytesIO(files["product_1.png"])).format == "PNG"
     assert stats["renamed"] == 1
     assert stats["converted"] == 1
@@ -69,6 +70,7 @@ def test_duplicate_output_names_from_different_folders_are_allowed():
     files = read_zip(result)
 
     assert list(files) == ["same_1.png", "other_1.png"]
+    assert all("/" not in name and "\\" not in name for name in files)
     assert stats["skipped_existing"] == 0
 
 
