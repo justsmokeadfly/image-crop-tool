@@ -78,6 +78,35 @@ def _convert_to_png(source_path: str, target_path: str) -> None:
         converted.save(target_path, format="PNG")
 
 
+def _default_progress_callback() -> Callable[[int, int, str], None] | None:
+    """Create a Streamlit progress bar when running inside the Streamlit app."""
+    try:
+        import streamlit as st
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        if get_script_run_ctx() is None:
+            return None
+    except Exception:
+        return None
+
+    progress = st.progress(0, text="Подготовка ZIP…")
+
+    def update(processed: int, total: int, stage: str) -> None:
+        stage_weights = {
+            "Распаковка": (0.00, 0.45),
+            "Обработка изображений": (0.45, 0.85),
+            "Сборка ZIP": (0.85, 1.00),
+        }
+        start, end = stage_weights.get(stage, (0.0, 1.0))
+        fraction = processed / total if total else 1.0
+        value = start + (end - start) * fraction
+        progress.progress(value, text=f"{stage} · {processed}/{total}")
+        if value >= 1.0:
+            progress.empty()
+
+    return update
+
+
 def clean_zip_bytes(
     zip_bytes: bytes,
     progress_callback: Callable[[int, int, str], None] | None = None,
@@ -102,6 +131,9 @@ def clean_zip_bytes(
         "skipped_existing": 0,
     }
 
+    if progress_callback is None:
+        progress_callback = _default_progress_callback()
+
     output = io.BytesIO()
     selected: list[tuple[str, str]] = []
     used_names: set[str] = set()
@@ -123,6 +155,8 @@ def clean_zip_bytes(
             file_name = Path(info.filename).name
             stats["scanned"] += 1
             if not _is_candidate(file_name):
+                if progress_callback:
+                    progress_callback(processed, total, "Обработка изображений")
                 continue
 
             stats["candidates"] += 1
@@ -131,24 +165,32 @@ def clean_zip_bytes(
             if not _is_first_image(file_name):
                 os.remove(source_path)
                 stats["deleted"] += 1
+                if progress_callback:
+                    progress_callback(processed, total, "Обработка изображений")
                 continue
 
             folder_name = Path(info.filename).parent.name
             if not folder_name:
                 os.remove(source_path)
                 stats["deleted"] += 1
+                if progress_callback:
+                    progress_callback(processed, total, "Обработка изображений")
                 continue
 
             output_name = f"{folder_name}_1.png"
             if output_name.casefold() in used_names:
                 os.remove(source_path)
                 stats["skipped_existing"] += 1
+                if progress_callback:
+                    progress_callback(processed, total, "Обработка изображений")
                 continue
 
             target_path = os.path.join(os.path.dirname(source_path), output_name)
             if os.path.exists(target_path):
                 os.remove(source_path)
                 stats["skipped_existing"] += 1
+                if progress_callback:
+                    progress_callback(processed, total, "Обработка изображений")
                 continue
 
             _convert_to_png(source_path, target_path)
@@ -161,6 +203,8 @@ def clean_zip_bytes(
                 progress_callback(processed, total, "Обработка изображений")
 
         total_selected = len(selected)
+        if total_selected == 0 and progress_callback:
+            progress_callback(1, 1, "Сборка ZIP")
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as result_zip:
             for processed, (file_path, arcname) in enumerate(selected, 1):
                 result_zip.write(file_path, arcname=arcname)
