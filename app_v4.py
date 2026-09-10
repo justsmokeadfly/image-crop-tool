@@ -99,18 +99,18 @@ with st.sidebar:
 
 st.markdown("""
 <style>
-.block-container{max-width:1500px;padding-top:.75rem;padding-bottom:1.5rem}
-.hero h1{margin:0 0 .1rem;font-size:clamp(1.65rem,2.6vw,2.25rem);letter-spacing:-.04em}.hero p{opacity:.7;margin:0 0 .55rem;font-size:.9rem}
-[data-testid="stTabs"] button{font-size:.95rem;font-weight:700;padding:.45rem .8rem}
-[data-testid="stFileUploaderDropzone"]{border-radius:10px;min-height:105px;padding:.55rem}
-[data-testid="stFileUploaderDropzone"] > div{padding:.35rem}
-[data-testid="stFileUploaderFile"]{padding:.2rem .4rem;margin:.2rem 0}
-[data-testid="stFileUploaderFileData"]{padding:.15rem .3rem}
-[data-testid="stVerticalBlock"]{gap:.55rem}
-[data-testid="stExpander"]{margin-bottom:.35rem}
-[data-testid="stButton"] button,[data-testid="stDownloadButton"] button{min-height:2.35rem;padding:.35rem .7rem}
-[data-testid="stAlert"]{padding:.55rem .8rem}
-[data-testid="stProgressBar"]{margin:.25rem 0}
+.block-container{max-width:1500px;padding-top:.45rem;padding-bottom:1rem}
+.hero h1{margin:0 0 .05rem;font-size:clamp(1.65rem,2.6vw,2.25rem);letter-spacing:-.04em}.hero p{opacity:.7;margin:0 0 .35rem;font-size:.9rem}
+[data-testid="stTabs"] button{font-size:.93rem;font-weight:700;padding:.3rem .7rem}
+[data-testid="stFileUploaderDropzone"]{border-radius:10px;min-height:85px;padding:.4rem}
+[data-testid="stFileUploaderDropzone"] > div{padding:.25rem}
+[data-testid="stFileUploaderFile"]{padding:.15rem .35rem;margin:.15rem 0}
+[data-testid="stFileUploaderFileData"]{padding:.1rem .25rem}
+[data-testid="stVerticalBlock"]{gap:.4rem}
+[data-testid="stExpander"]{margin-bottom:.25rem}
+[data-testid="stButton"] button,[data-testid="stDownloadButton"] button{min-height:2.15rem;padding:.3rem .65rem}
+[data-testid="stAlert"]{padding:.45rem .7rem}
+[data-testid="stProgressBar"]{margin:.2rem 0}
 </style>
 """, unsafe_allow_html=True)
 st.markdown(f'<div class="hero"><h1>🖼️ Обработчик изображений</h1><p>Обрезка изображений, изменение размера и очистка ZIP-архивов · v{APP_VERSION}</p></div>', unsafe_allow_html=True)
