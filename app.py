@@ -22,6 +22,8 @@ preview_function = r"""
 def _show_uploaded_previews(uploaded, collect_func):
     if not uploaded:
         return
+    if any(Path(f.name).suffix.lower() == ".zip" for f in uploaded):
+        return
     try:
         items = collect_func(uploaded)
     except Exception as exc:
@@ -70,9 +72,7 @@ def _show_uploaded_previews(uploaded, collect_func):
 """
 
 source = source.replace('def trim_background(img: Image.Image, threshold: int = 18):', preview_function + '\n\ndef trim_background(img: Image.Image, threshold: int = 18):', 1)
-source = source.replace('        if any(Path(f.name).suffix.lower() == ".zip" and f.size > MAX_ZIP_BYTES for f in uploaded):\n            st.error("Один из ZIP-архивов превышает 300 МБ.")', '        if any(Path(f.name).suffix.lower() == ".zip" and f.size > MAX_ZIP_BYTES for f in uploaded):\n            st.error("Один из ZIP-архивов превышает 300 МБ.")\n        if not any(Path(f.name).suffix.lower() == ".zip" for f in uploaded):
-            _show_uploaded_previews(uploaded, collect_image_inputs)', 1)
-source = source.replace('        if any(Path(f.name).suffix.lower() == ".zip" and f.size > MAX_ZIP_BYTES for f in resize_uploaded): st.error("Один из ZIP-архивов превышает 300 МБ.")', '        if any(Path(f.name).suffix.lower() == ".zip" and f.size > MAX_ZIP_BYTES for f in resize_uploaded): st.error("Один из ZIP-архивов превышает 300 МБ.")\n        if not any(Path(f.name).suffix.lower() == ".zip" for f in resize_uploaded):
-            _show_uploaded_previews(resize_uploaded, collect_image_inputs)', 1)
+source = source.replace('        if any(Path(f.name).suffix.lower() == ".zip" and f.size > MAX_ZIP_BYTES for f in uploaded):\\n            st.error("Один из ZIP-архивов превышает 300 МБ.")', '        if any(Path(f.name).suffix.lower() == ".zip" and f.size > MAX_ZIP_BYTES for f in uploaded):\\n            st.error("Один из ZIP-архивов превышает 300 МБ.")\\n        _show_uploaded_previews(uploaded, collect_image_inputs)', 1)
+source = source.replace('        if any(Path(f.name).suffix.lower() == ".zip" and f.size > MAX_ZIP_BYTES for f in resize_uploaded): st.error("Один из ZIP-архивов превышает 300 МБ.")', '        if any(Path(f.name).suffix.lower() == ".zip" and f.size > MAX_ZIP_BYTES for f in resize_uploaded): st.error("Один из ZIP-архивов превышает 300 МБ.")\\n        _show_uploaded_previews(resize_uploaded, collect_image_inputs)', 1)
 
 exec(compile(source, "app_v4.py", "exec"))
